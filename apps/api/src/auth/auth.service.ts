@@ -1,16 +1,63 @@
-import { Algorithm, hash as hashPassword } from "@node-rs/argon2";
+import { Algorithm, hash as hashPassword, verify as verifyPassword } from "@node-rs/argon2";
 import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { randomBytes } from "node:crypto";
-import { EXPENSE_CATEGORY_NAMES, RegisterBody } from "@kranjang/shared";
+import { EXPENSE_CATEGORY_NAMES, LoginBody, RegisterBody } from "@kranjang/shared";
 import { AppError } from "../common/app-error.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { sendDevLink } from "./mailer.js";
+import { assertLoginAllowed, recordLoginFailure, resetLoginFailures } from "./rate-limit.js";
 import { AuthResult } from "./auth.types.js";
 import { hashToken, JwtPayload, newRefreshPlain, REFRESH_TTL_MS, signAccess } from "./tokens.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REGISTER_SLUG_RETRY_LIMIT = 5;
+const LOGIN_FAILURE_MESSAGE = "Email atau password salah.";
+const SUPER_ADMIN_LOGIN_MESSAGE = "Akun platform tidak dapat masuk ke aplikasi tenant pada fase ini.";
+
+type SessionUser = {
+  id: string;
+  tenantId: string | null;
+  name: string;
+  email: string;
+  passwordHash: string;
+  isSuperAdmin: boolean;
+  emailVerifiedAt: Date | null;
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    subscriptionStatus: string;
+    trialEndDate: Date;
+  } | null;
+  userRoles: Array<{
+    role: {
+      name: string;
+      permissions: Array<{
+        permission: {
+          code: string;
+        };
+      }>;
+    };
+  }>;
+};
+
+const sessionUserInclude = {
+  tenant: true,
+  userRoles: {
+    include: {
+      role: {
+        include: {
+          permissions: {
+            include: {
+              permission: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 function slugify(value: string): string {
   const slug = value
@@ -275,6 +322,206 @@ export class AuthService {
     }
 
     throw new AppError("INTERNAL_ERROR", "Terjadi kesalahan. Silakan coba lagi.", 500);
+  }
+
+  async login(body: LoginBody): Promise<AuthResult> {
+    assertLoginAllowed(body.email);
+
+    const user = (await this.prisma.user.findFirst({
+      where: {
+        email: body.email,
+        deletedAt: null,
+      },
+      include: sessionUserInclude,
+    })) as SessionUser | null;
+
+    if (!user || !(await verifyPassword(user.passwordHash, body.password))) {
+      recordLoginFailure(body.email);
+      throw new AppError("UNAUTHORIZED", LOGIN_FAILURE_MESSAGE, 401);
+    }
+
+    if (user.isSuperAdmin || user.tenantId === null) {
+      throw new AppError("FORBIDDEN", SUPER_ADMIN_LOGIN_MESSAGE, 403);
+    }
+
+    const session = this.toSessionContext(user);
+    const now = new Date();
+    const refreshPlain = newRefreshPlain();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: now },
+      });
+
+      await tx.refreshToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashToken(refreshPlain),
+          expiresAt: new Date(now.getTime() + REFRESH_TTL_MS),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: user.tenantId,
+          userId: user.id,
+          action: "LOGIN",
+          module: "auth",
+          entity: "session",
+          entityId: user.id,
+        },
+      });
+    });
+
+    resetLoginFailures(body.email);
+
+    return {
+      ...session,
+      accessToken: signAccess(this.jwt, session.payload),
+      refreshPlain,
+    };
+  }
+
+  async refresh(refreshPlain: string | undefined): Promise<AuthResult> {
+    if (!refreshPlain) {
+      throw new AppError("UNAUTHORIZED", "Akses tidak sah", 401);
+    }
+
+    const now = new Date();
+    const rotated = await this.prisma.$transaction(async (tx) => {
+      const existing = (await tx.refreshToken.findFirst({
+        where: {
+          tokenHash: hashToken(refreshPlain),
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        include: {
+          user: {
+            include: sessionUserInclude,
+          },
+        },
+      })) as ({ id: string; userId: string; user: SessionUser } | null);
+
+      if (!existing || existing.user.isSuperAdmin || existing.user.tenantId === null) {
+        return null;
+      }
+
+      const session = this.toSessionContext(existing.user);
+      const nextRefreshPlain = newRefreshPlain();
+      const nextToken = await tx.refreshToken.create({
+        data: {
+          userId: existing.userId,
+          tokenHash: hashToken(nextRefreshPlain),
+          expiresAt: new Date(now.getTime() + REFRESH_TTL_MS),
+        },
+      });
+
+      await tx.refreshToken.update({
+        where: { id: existing.id },
+        data: {
+          revokedAt: now,
+          replacedBy: nextToken.id,
+        },
+      });
+
+      return {
+        ...session,
+        refreshPlain: nextRefreshPlain,
+      };
+    });
+
+    if (!rotated) {
+      throw new AppError("UNAUTHORIZED", "Akses tidak sah", 401);
+    }
+
+    return {
+      user: rotated.user,
+      tenant: rotated.tenant,
+      accessToken: signAccess(this.jwt, rotated.payload),
+      refreshPlain: rotated.refreshPlain,
+    };
+  }
+
+  async logout(refreshPlain: string | undefined): Promise<void> {
+    if (!refreshPlain) {
+      return;
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.refreshToken.findFirst({
+        where: {
+          tokenHash: hashToken(refreshPlain),
+        },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!existing) {
+        return;
+      }
+
+      await tx.refreshToken.updateMany({
+        where: {
+          userId: existing.userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: existing.user.tenantId,
+          userId: existing.userId,
+          action: "LOGOUT",
+          module: "auth",
+          entity: "session",
+          entityId: existing.userId,
+        },
+      });
+    });
+  }
+
+  private toSessionContext(user: SessionUser) {
+    if (!user.tenantId || !user.tenant) {
+      throw new AppError("FORBIDDEN", SUPER_ADMIN_LOGIN_MESSAGE, 403);
+    }
+
+    const assignment = user.userRoles[0]?.role;
+    if (!assignment) {
+      throw new AppError("INTERNAL_ERROR", "Terjadi kesalahan. Silakan coba lagi.", 500);
+    }
+
+    const permissions = assignment.permissions.map((item) => item.permission.code);
+    const payload: JwtPayload = {
+      sub: user.id,
+      tid: user.tenant.id,
+      role: assignment.name,
+      perms: permissions,
+    };
+
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: assignment.name,
+        permissions,
+        emailVerifiedAt: user.emailVerifiedAt ? user.emailVerifiedAt.toISOString() : null,
+      },
+      tenant: {
+        id: user.tenant.id,
+        name: user.tenant.name,
+        slug: user.tenant.slug,
+        subscriptionStatus: user.tenant.subscriptionStatus,
+        trialEndDate: user.tenant.trialEndDate.toISOString(),
+      },
+      payload,
+    };
   }
 
   private async getUniqueSlug(tx: Pick<PrismaService, "tenant">, businessName: string): Promise<string> {
