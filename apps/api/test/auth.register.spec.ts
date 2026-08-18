@@ -55,6 +55,7 @@ describe("POST /api/v1/auth/register", () => {
     const again = await register(app, { email });
     expect(again.status).toBe(409);
     expect(again.body.code).toBe("CONFLICT");
+    expect(again.body.message).toBe("Email sudah terpakai");
   });
 
   it("makes unique slugs for the same business name", async () => {
