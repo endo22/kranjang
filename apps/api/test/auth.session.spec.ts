@@ -2,6 +2,7 @@ import { Algorithm, hash as hashPassword } from "@node-rs/argon2";
 import type { INestApplication } from "@nestjs/common";
 import { PrismaClient } from "@kranjang/db";
 import request from "supertest";
+import { hashToken } from "../src/auth/tokens.js";
 import { createApp, register, uniqueEmail } from "./helpers.js";
 
 describe("auth session", () => {
@@ -75,6 +76,35 @@ describe("auth session", () => {
 
     expect(reused.status).toBe(401);
     expect(reused.body.code).toBe("UNAUTHORIZED");
+  });
+
+  it("rejects refresh for soft-deleted users", async () => {
+    const email = uniqueEmail();
+    const created = await register(app, { email });
+    const cookie = created.headers["set-cookie"] ?? [];
+    const refreshCookie = cookie.find((value) => value.startsWith("kranjang_refresh="));
+    const refreshPlain = refreshCookie?.match(/^kranjang_refresh=([^;]+)/)?.[1];
+
+    expect(refreshPlain).toBeTruthy();
+
+    await prisma.user.update({
+      where: { email },
+      data: { deletedAt: new Date() },
+    });
+
+    const res = await request(app.getHttpServer()).post("/api/v1/auth/refresh").set("Cookie", cookie);
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("UNAUTHORIZED");
+    expect((res.headers["set-cookie"] ?? []).join(";")).toMatch(/kranjang_refresh=;/);
+
+    const token = await prisma.refreshToken.findFirst({
+      where: {
+        tokenHash: refreshPlain ? hashToken(refreshPlain) : "",
+      },
+    });
+
+    expect(token?.revokedAt).toBeTruthy();
   });
 
   it("refresh without cookie is UNAUTHORIZED", async () => {

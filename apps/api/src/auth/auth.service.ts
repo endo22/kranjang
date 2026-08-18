@@ -14,6 +14,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const REGISTER_SLUG_RETRY_LIMIT = 5;
 const LOGIN_FAILURE_MESSAGE = "Email atau password salah.";
 const SUPER_ADMIN_LOGIN_MESSAGE = "Akun platform tidak dapat masuk ke aplikasi tenant pada fase ini.";
+const DUMMY_LOGIN_PASSWORD_HASH = "$argon2id$v=19$m=19456,t=2,p=1$Cx04jijWB8xQpWHnmgmKWg$DjIU0S3ystmcXpGRtrQQH6iLavrYg5Nt8dJwbehEVdQ";
 
 type SessionUser = {
   id: string;
@@ -22,6 +23,7 @@ type SessionUser = {
   email: string;
   passwordHash: string;
   isSuperAdmin: boolean;
+  deletedAt: Date | null;
   emailVerifiedAt: Date | null;
   tenant: {
     id: string;
@@ -334,8 +336,9 @@ export class AuthService {
       },
       include: sessionUserInclude,
     })) as SessionUser | null;
+    const passwordMatches = await verifyPassword(user?.passwordHash ?? DUMMY_LOGIN_PASSWORD_HASH, body.password);
 
-    if (!user || !(await verifyPassword(user.passwordHash, body.password))) {
+    if (!user || !passwordMatches) {
       recordLoginFailure(body.email);
       throw new AppError("UNAUTHORIZED", LOGIN_FAILURE_MESSAGE, 401);
     }
@@ -396,18 +399,26 @@ export class AuthService {
           revokedAt: null,
           expiresAt: { gt: now },
         },
-        include: {
-          user: {
-            include: sessionUserInclude,
-          },
-        },
-      })) as ({ id: string; userId: string; user: SessionUser } | null);
+      })) as { id: string; userId: string } | null;
 
-      if (!existing || existing.user.isSuperAdmin || existing.user.tenantId === null) {
+      if (!existing) {
         return null;
       }
 
-      const session = this.toSessionContext(existing.user);
+      const user = (await tx.user.findUnique({
+        where: { id: existing.userId },
+        include: sessionUserInclude,
+      })) as SessionUser | null;
+
+      if (!user || user.deletedAt || user.isSuperAdmin || user.tenantId === null) {
+        await tx.refreshToken.update({
+          where: { id: existing.id },
+          data: { revokedAt: now },
+        });
+        return null;
+      }
+
+      const session = this.toSessionContext(user);
       const nextRefreshPlain = newRefreshPlain();
       const nextToken = await tx.refreshToken.create({
         data: {
