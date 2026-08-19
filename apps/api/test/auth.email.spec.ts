@@ -3,6 +3,7 @@ import { jest } from "@jest/globals";
 import request from "supertest";
 import { PrismaService } from "../src/prisma/prisma.service.js";
 import { hashToken } from "../src/auth/tokens.js";
+import { sendDevLink } from "../src/auth/mailer.js";
 import { createApp, register, uniqueEmail } from "./helpers.js";
 
 describe("email verification and reset", () => {
@@ -99,6 +100,23 @@ describe("email verification and reset", () => {
     expect(stored.usedAt).toBeNull();
     expect(stored.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect(stored.tokenHash).not.toBe(plain);
+  });
+
+  it("does not log dev links in production", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    process.env.NODE_ENV = "production";
+
+    try {
+      sendDevLink("verify", "http://localhost:3000/verify-email?token=secret");
+      expect(consoleSpy).not.toHaveBeenCalled();
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
   });
 
   it("resets password, revokes refresh tokens, and allows new login", async () => {
