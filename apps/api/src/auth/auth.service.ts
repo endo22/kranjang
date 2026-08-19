@@ -456,7 +456,7 @@ export class AuthService {
 
   async logout(refreshPlain: string | undefined): Promise<void> {
     if (!refreshPlain) {
-      return;
+      throw new AppError("UNAUTHORIZED", "Akses tidak sah", 401);
     }
 
     const now = new Date();
@@ -464,6 +464,8 @@ export class AuthService {
       const existing = await tx.refreshToken.findFirst({
         where: {
           tokenHash: hashToken(refreshPlain),
+          revokedAt: null,
+          expiresAt: { gt: now },
         },
         include: {
           user: true,
@@ -471,13 +473,12 @@ export class AuthService {
       });
 
       if (!existing) {
-        return;
+        throw new AppError("UNAUTHORIZED", "Akses tidak sah", 401);
       }
 
-      await tx.refreshToken.updateMany({
+      await tx.refreshToken.update({
         where: {
-          userId: existing.userId,
-          revokedAt: null,
+          id: existing.id,
         },
         data: {
           revokedAt: now,

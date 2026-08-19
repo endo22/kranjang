@@ -69,8 +69,13 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    await this.authService.logout(request.cookies?.[REFRESH_COOKIE]);
-    response.clearCookie(REFRESH_COOKIE, cookieOptions());
+    try {
+      await this.authService.logout(request.cookies?.[REFRESH_COOKIE]);
+      response.clearCookie(REFRESH_COOKIE, cookieOptions());
+    } catch (error) {
+      response.clearCookie(REFRESH_COOKIE, cookieOptions());
+      throw error;
+    }
 
     return { success: true };
   }

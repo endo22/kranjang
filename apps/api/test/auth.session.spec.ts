@@ -142,4 +142,25 @@ describe("auth session", () => {
 
     expect(again.status).toBe(401);
   });
+
+  it("rejects logout from a rotated refresh cookie without killing the active session", async () => {
+    const created = await register(app);
+    const originalCookie = created.headers["set-cookie"];
+
+    const rotated = await request(app.getHttpServer()).post("/api/v1/auth/refresh").set("Cookie", originalCookie);
+    const rotatedCookie = rotated.headers["set-cookie"];
+
+    expect(rotated.status).toBe(200);
+    expect(rotatedCookie).toBeDefined();
+
+    const logout = await request(app.getHttpServer()).post("/api/v1/auth/logout").set("Cookie", originalCookie);
+
+    expect(logout.status).toBe(401);
+    expect((logout.headers["set-cookie"] ?? []).join(";")).toMatch(/kranjang_refresh=;/);
+
+    const stillAlive = await request(app.getHttpServer()).post("/api/v1/auth/refresh").set("Cookie", rotatedCookie);
+
+    expect(stillAlive.status).toBe(200);
+    expect(stillAlive.body.accessToken).toEqual(expect.any(String));
+  });
 });
