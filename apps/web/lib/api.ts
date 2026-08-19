@@ -25,6 +25,50 @@ export type AuthSession = {
   tenant: AuthTenant;
 };
 
+export type MeProfile = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+};
+
+export type RolePermission = {
+  code: string;
+  module: string;
+  description: string;
+};
+
+export type RoleRecord = {
+  id: string;
+  name: string;
+  permissions: RolePermission[];
+};
+
+export type UserRecord = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: {
+    id: string;
+    name: string;
+  };
+  createdAt: string;
+};
+
+export type SettingsRecord = {
+  name: string;
+  phone: string | null;
+  timezone: string;
+  allowNegativeStock: boolean;
+  taxPercent: string;
+  taxInclusive: boolean;
+  receiptFooter: string | null;
+  trialEndDate: string;
+  subscriptionStatus: string;
+};
+
 type ApiOptions = {
   retryOnUnauthorized?: boolean;
   includeAuthorization?: boolean;
@@ -105,6 +149,15 @@ export function clearAccessToken() {
 
 export function getAccessToken() {
   return accessToken;
+}
+
+export function jsonInit(body: unknown): Pick<RequestInit, "body" | "headers"> {
+  return {
+    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
+    },
+  };
 }
 
 export async function api<T>(path: string, init: RequestInit = {}, options: ApiOptions = {}) {
