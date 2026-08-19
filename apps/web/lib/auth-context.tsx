@@ -4,7 +4,7 @@ import { loginSchema, registerSchema } from "@kranjang/shared";
 import type { LoginBody, RegisterBody } from "@kranjang/shared";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { api, clearAccessToken, setAccessToken } from "@/lib/api";
+import { api, clearAccessToken, setAccessToken, setSessionExpiredHandler } from "@/lib/api";
 import type { AuthSession } from "@/lib/api";
 
 type AuthStatus = "loading" | "ready";
@@ -54,6 +54,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       commitSession(null);
       return null;
     }
+  }, [commitSession]);
+
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      commitSession(null);
+    });
+
+    return () => {
+      setSessionExpiredHandler(null);
+    };
   }, [commitSession]);
 
   useEffect(() => {

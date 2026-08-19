@@ -74,6 +74,8 @@ type ApiOptions = {
   includeAuthorization?: boolean;
 };
 
+type SessionExpiredHandler = () => void;
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -89,6 +91,7 @@ export class ApiError extends Error {
 }
 
 let accessToken: string | null = null;
+let sessionExpiredHandler: SessionExpiredHandler | null = null;
 
 function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_URL?.trim();
@@ -139,12 +142,21 @@ async function refreshSession() {
   );
 }
 
+function expireSession() {
+  clearAccessToken();
+  sessionExpiredHandler?.();
+}
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
 export function clearAccessToken() {
   accessToken = null;
+}
+
+export function setSessionExpiredHandler(handler: SessionExpiredHandler | null) {
+  sessionExpiredHandler = handler;
 }
 
 export function getAccessToken() {
@@ -174,14 +186,19 @@ export async function api<T>(path: string, init: RequestInit = {}, options: ApiO
     credentials: "include",
   });
 
-  if (response.status === 401 && retryOnUnauthorized && path !== "/auth/refresh") {
-    const session = await refreshSession();
-    setAccessToken(session.accessToken);
+  if (response.status === 401 && retryOnUnauthorized && path !== "/auth/refresh" && !path.startsWith("/auth/")) {
+    try {
+      const session = await refreshSession();
+      setAccessToken(session.accessToken);
 
-    return api<T>(path, init, {
-      retryOnUnauthorized: false,
-      includeAuthorization,
-    });
+      return api<T>(path, init, {
+        retryOnUnauthorized: false,
+        includeAuthorization,
+      });
+    } catch (error) {
+      expireSession();
+      throw error;
+    }
   }
 
   if (!response.ok) {

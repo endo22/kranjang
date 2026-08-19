@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 
-import { api, clearAccessToken, setAccessToken } from "../lib/api";
+import { api, clearAccessToken, getAccessToken, setAccessToken, setSessionExpiredHandler, ApiError } from "../lib/api";
+
+function unauthorizedResponse() {
+  return new Response(
+    JSON.stringify({
+      code: "UNAUTHORIZED",
+      message: "Akses tidak sah",
+      details: {},
+    }),
+    {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    },
+  );
+}
 
 describe("api client", () => {
   const originalApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -10,10 +24,12 @@ describe("api client", () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_API_URL = "";
     clearAccessToken();
+    setSessionExpiredHandler(null);
   });
 
   afterEach(() => {
     clearAccessToken();
+    setSessionExpiredHandler(null);
     globalThis.fetch = originalFetch;
 
     if (originalApiUrl === undefined) {
@@ -73,17 +89,7 @@ describe("api client", () => {
       }
 
       if (requestCount === 1) {
-        return new Response(
-          JSON.stringify({
-            code: "UNAUTHORIZED",
-            message: "Akses tidak sah",
-            details: {},
-          }),
-          {
-            status: 401,
-            headers: { "content-type": "application/json" },
-          },
-        );
+        return unauthorizedResponse();
       }
 
       assert.equal(url, "http://localhost:3001/api/v1/me");
@@ -97,5 +103,54 @@ describe("api client", () => {
 
     assert.deepEqual(result, { ok: true });
     assert.equal(fetchMock.mock.calls.length, 3);
+  });
+
+  it("clears the in-memory session when refresh retry fails", async () => {
+    setAccessToken("expired-token");
+    let sessionExpiredCalls = 0;
+
+    setSessionExpiredHandler(() => {
+      sessionExpiredCalls += 1;
+    });
+
+    const fetchMock = mock.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url === "http://localhost:3001/api/v1/auth/refresh") {
+        return unauthorizedResponse();
+      }
+
+      assert.equal(url, "http://localhost:3001/api/v1/me");
+      return unauthorizedResponse();
+    });
+
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await assert.rejects(api("/me"), (error) => error instanceof ApiError && error.status === 401);
+
+    assert.equal(fetchMock.mock.calls.length, 2);
+    assert.equal(getAccessToken(), null);
+    assert.equal(sessionExpiredCalls, 1);
+  });
+
+  it("does not refresh public auth endpoints on 401", async () => {
+    setAccessToken("expired-token");
+    let sessionExpiredCalls = 0;
+
+    setSessionExpiredHandler(() => {
+      sessionExpiredCalls += 1;
+    });
+
+    const fetchMock = mock.fn(async (input: string | URL | Request) => {
+      assert.equal(String(input), "http://localhost:3001/api/v1/auth/login");
+      return unauthorizedResponse();
+    });
+
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await assert.rejects(api("/auth/login", { method: "POST" }), (error) => error instanceof ApiError && error.status === 401);
+
+    assert.equal(fetchMock.mock.calls.length, 1);
+    assert.equal(sessionExpiredCalls, 0);
   });
 });
