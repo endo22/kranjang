@@ -394,16 +394,32 @@ export class AuthService {
     }
 
     const now = new Date();
+    const tokenHash = hashToken(refreshPlain);
     const rotated = await this.prisma.$transaction(async (tx) => {
       const existing = (await tx.refreshToken.findFirst({
         where: {
-          tokenHash: hashToken(refreshPlain),
-          revokedAt: null,
+          tokenHash,
           expiresAt: { gt: now },
         },
       })) as { id: string; userId: string } | null;
 
       if (!existing) {
+        return null;
+      }
+
+      const claimed = await tx.refreshToken.updateMany({
+        where: {
+          id: existing.id,
+          tokenHash,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      if (claimed.count !== 1) {
         return null;
       }
 
@@ -413,10 +429,6 @@ export class AuthService {
       })) as SessionUser | null;
 
       if (!user || user.deletedAt || user.isSuperAdmin || user.tenantId === null) {
-        await tx.refreshToken.update({
-          where: { id: existing.id },
-          data: { revokedAt: now },
-        });
         return null;
       }
 
@@ -433,7 +445,6 @@ export class AuthService {
       await tx.refreshToken.update({
         where: { id: existing.id },
         data: {
-          revokedAt: now,
           replacedBy: nextToken.id,
         },
       });

@@ -20,6 +20,8 @@ export class SettingsService {
   }
 
   async patch(currentUser: JwtPayload, body: PatchSettingsBody) {
+    const current = await this.getScopedTenant(currentUser.tid);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.tenant.update({
         where: { id: currentUser.tid },
@@ -37,6 +39,27 @@ export class SettingsService {
           taxPercent: body.taxPercent,
           taxInclusive: body.taxInclusive,
           receiptFooter: body.receiptFooter,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: currentUser.tid,
+          userId: currentUser.sub,
+          action: "UPDATE",
+          module: "settings",
+          entity: "tenant",
+          entityId: currentUser.tid,
+          oldValue: this.toAuditSettingsSnapshot(current),
+          newValue: {
+            name: body.name,
+            phone: body.phone,
+            timezone: body.timezone,
+            allowNegativeStock: body.allowNegativeStock,
+            taxPercent: body.taxPercent,
+            taxInclusive: body.taxInclusive,
+            receiptFooter: body.receiptFooter,
+          },
         },
       });
     });
@@ -73,6 +96,18 @@ export class SettingsService {
       receiptFooter: tenant.settings.receiptFooter,
       trialEndDate: tenant.trialEndDate.toISOString(),
       subscriptionStatus: tenant.subscriptionStatus,
+    };
+  }
+
+  private toAuditSettingsSnapshot(tenant: TenantWithSettings) {
+    return {
+      name: tenant.name,
+      phone: tenant.phone,
+      timezone: tenant.timezone,
+      allowNegativeStock: tenant.allowNegativeStock,
+      taxPercent: Number(tenant.settings.taxPercent),
+      taxInclusive: tenant.settings.taxInclusive,
+      receiptFooter: tenant.settings.receiptFooter,
     };
   }
 }

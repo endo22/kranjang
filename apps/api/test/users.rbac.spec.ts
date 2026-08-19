@@ -134,6 +134,19 @@ describe("users RBAC and tenant isolation", () => {
 
     const softDeleted = await prisma.user.findUniqueOrThrow({ where: { id: created.body.id } });
     expect(softDeleted.deletedAt).toBeTruthy();
+
+    const audits = await prisma.auditLog.findMany({
+      where: {
+        tenantId: owner.body.tenant.id,
+        module: "user",
+        entity: "user",
+        entityId: created.body.id,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    expect(audits.map((item) => item.action)).toEqual(["CREATE", "UPDATE", "DELETE"]);
+    expect(audits.every((item) => item.userId === owner.body.user.id)).toBe(true);
   });
 
   it("forbids cashier from accessing users and roles endpoints", async () => {

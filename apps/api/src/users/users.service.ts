@@ -100,10 +100,24 @@ export class UsersService {
           },
         });
 
-        return tx.user.findUniqueOrThrow({
+        const createdUser = await tx.user.findUniqueOrThrow({
           where: { id: user.id },
           include: userInclude,
         });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId: currentUser.tid,
+            userId: currentUser.sub,
+            action: "CREATE",
+            module: "user",
+            entity: "user",
+            entityId: user.id,
+            newValue: this.toAuditUserSnapshot(createdUser, role.name),
+          },
+        });
+
+        return createdUser;
       });
 
       return this.toUserResponse(created);
@@ -147,10 +161,25 @@ export class UsersService {
         });
       }
 
-      return tx.user.findUniqueOrThrow({
+      const updatedUser = await tx.user.findUniqueOrThrow({
         where: { id: user.id },
         include: userInclude,
       });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: currentUser.tid,
+          userId: currentUser.sub,
+          action: "UPDATE",
+          module: "user",
+          entity: "user",
+          entityId: user.id,
+          oldValue: this.toAuditUserSnapshot(user, assignedRole.name),
+          newValue: this.toAuditUserSnapshot(updatedUser, this.getAssignedRole(updatedUser).name),
+        },
+      });
+
+      return updatedUser;
     });
 
     return this.toUserResponse(updated);
@@ -168,11 +197,30 @@ export class UsersService {
       await this.assertCanChangeLastOwner(currentUser.tid, user.id);
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        deletedAt: new Date(),
-      },
+    const deletedAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          deletedAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: currentUser.tid,
+          userId: currentUser.sub,
+          action: "DELETE",
+          module: "user",
+          entity: "user",
+          entityId: user.id,
+          oldValue: this.toAuditUserSnapshot(user, assignedRole.name),
+          newValue: {
+            ...this.toAuditUserSnapshot(user, assignedRole.name),
+            deletedAt: deletedAt.toISOString(),
+          },
+        },
+      });
     });
   }
 
@@ -267,6 +315,17 @@ export class UsersService {
         name: role.name,
       },
       createdAt: user.createdAt.toISOString(),
+    };
+  }
+
+  private toAuditUserSnapshot(user: UserWithRole, roleName: string) {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: roleName,
+      deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
     };
   }
 }

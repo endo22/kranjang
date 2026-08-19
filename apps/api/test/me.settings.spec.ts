@@ -133,6 +133,36 @@ describe("me and settings", () => {
       subscriptionStatus: "TRIAL",
     });
     expect(patched.body.trialEndDate).toEqual(expect.any(String));
+
+    const audit = await prisma.auditLog.findFirst({
+      where: {
+        tenantId: created.body.tenant.id,
+        action: "UPDATE",
+        module: "settings",
+        entity: "tenant",
+        entityId: created.body.tenant.id,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(audit).toBeTruthy();
+    expect(audit?.userId).toBe(created.body.user.id);
+    expect(audit?.oldValue).toMatchObject({
+      name: "Warung Satu",
+      phone: "081234567890",
+      allowNegativeStock: false,
+      taxPercent: 0,
+      taxInclusive: true,
+      receiptFooter: null,
+    });
+    expect(audit?.newValue).toMatchObject({
+      name: "Warung Dua",
+      phone: null,
+      allowNegativeStock: true,
+      taxPercent: 11,
+      taxInclusive: false,
+      receiptFooter: "Terima kasih",
+    });
   });
 
   it("forbids cashier from settings endpoints but still allows me endpoints", async () => {

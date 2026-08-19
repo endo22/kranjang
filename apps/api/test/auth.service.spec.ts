@@ -97,6 +97,55 @@ function createRegisterDeps() {
   return { prisma, state };
 }
 
+function createSessionUser() {
+  return {
+    id: "user-1",
+    tenantId: "tenant-1",
+    name: "Budi",
+    email: "owner@example.com",
+    passwordHash: "password-hash",
+    isSuperAdmin: false,
+    deletedAt: null,
+    emailVerifiedAt: null,
+    tenant: {
+      id: "tenant-1",
+      name: "Warung Budi",
+      slug: "warung-budi",
+      subscriptionStatus: "TRIAL",
+      trialEndDate: new Date("2026-09-17T00:00:00.000Z"),
+    },
+    userRoles: [
+      {
+        role: {
+          name: "Owner",
+          permissions: [{ permission: { code: "settings.manage" } }],
+        },
+      },
+    ],
+  };
+}
+
+function createRefreshDeps(revokeCount = 1) {
+  const user = createSessionUser();
+  const tx = {
+    refreshToken: {
+      findFirst: jest.fn(async () => ({ id: "refresh-1", userId: user.id })),
+      updateMany: jest.fn(async () => ({ count: revokeCount })),
+      create: jest.fn(async () => ({ id: "refresh-2" })),
+      update: jest.fn(async () => ({ id: "refresh-1" })),
+    },
+    user: {
+      findUnique: jest.fn(async () => user),
+    },
+  };
+
+  const prisma = {
+    $transaction: jest.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)),
+  };
+
+  return { prisma, tx };
+}
+
 describe("AuthService.register", () => {
   it("retries the transaction with a new slug when Prisma reports slug conflict", async () => {
     const { prisma, state } = createRegisterDeps();
@@ -142,5 +191,24 @@ describe("AuthService.register", () => {
     });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AuthService.refresh", () => {
+  it("rejects refresh when the presented token can no longer be atomically revoked", async () => {
+    const { prisma, tx } = createRefreshDeps(0);
+    const service = new AuthService(prisma as never, new JwtService({ secret: "test-secret" }));
+
+    await expect(service.refresh("presented-refresh-token")).rejects.toMatchObject({
+      status: 401,
+      response: {
+        code: "UNAUTHORIZED",
+        message: "Akses tidak sah",
+      },
+    });
+
+    expect(tx.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.user.findUnique).not.toHaveBeenCalled();
+    expect(tx.refreshToken.create).not.toHaveBeenCalled();
   });
 });
