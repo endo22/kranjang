@@ -1,10 +1,15 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res } from "@nestjs/common";
-import { loginSchema, registerSchema } from "@kranjang/shared";
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, verifyEmailSchema } from "@kranjang/shared";
 import type { LoginBody, RegisterBody } from "@kranjang/shared";
 import type { Request, Response } from "express";
+import type { z } from "zod";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { AuthService } from "./auth.service.js";
 import { cookieOptions, REFRESH_COOKIE } from "./tokens.js";
+
+type ForgotPasswordBody = z.infer<typeof forgotPasswordSchema>;
+type ResetPasswordBody = z.infer<typeof resetPasswordSchema>;
+type VerifyEmailBody = z.infer<typeof verifyEmailSchema>;
 
 @Controller("auth")
 export class AuthController {
@@ -78,5 +83,26 @@ export class AuthController {
     }
 
     return { success: true };
+  }
+
+  @Post("verify-email")
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body(new ZodPipe(verifyEmailSchema)) body: VerifyEmailBody) {
+    await this.authService.verifyEmail(body.token);
+    return { ok: true };
+  }
+
+  @Post("forgot-password")
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body(new ZodPipe(forgotPasswordSchema)) body: ForgotPasswordBody) {
+    await this.authService.forgotPassword(body.email);
+    return { ok: true };
+  }
+
+  @Post("reset-password")
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body(new ZodPipe(resetPasswordSchema)) body: ResetPasswordBody) {
+    await this.authService.resetPassword(body.token, body.password);
+    return { ok: true };
   }
 }

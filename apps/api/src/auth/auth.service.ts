@@ -11,9 +11,11 @@ import { AuthResult } from "./auth.types.js";
 import { hashToken, JwtPayload, newRefreshPlain, REFRESH_TTL_MS, signAccess } from "./tokens.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 const REGISTER_SLUG_RETRY_LIMIT = 5;
 const LOGIN_FAILURE_MESSAGE = "Email atau password salah.";
 const SUPER_ADMIN_LOGIN_MESSAGE = "Akun platform tidak dapat masuk ke aplikasi tenant pada fase ini.";
+const INVALID_LINK_MESSAGE = "Tautan tidak valid atau kedaluwarsa.";
 const DUMMY_LOGIN_PASSWORD_HASH = "$argon2id$v=19$m=19456,t=2,p=1$Cx04jijWB8xQpWHnmgmKWg$DjIU0S3ystmcXpGRtrQQH6iLavrYg5Nt8dJwbehEVdQ";
 
 type SessionUser = {
@@ -496,6 +498,114 @@ export class AuthService {
         },
       });
     });
+  }
+
+  async verifyEmail(tokenPlain: string): Promise<void> {
+    const now = new Date();
+
+    const verified = await this.prisma.$transaction(async (tx) => {
+      const token = await tx.emailVerificationToken.findFirst({
+        where: {
+          tokenHash: hashToken(tokenPlain),
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+      });
+
+      if (!token) {
+        return false;
+      }
+
+      await tx.emailVerificationToken.update({
+        where: { id: token.id },
+        data: { usedAt: now },
+      });
+
+      await tx.user.update({
+        where: { id: token.userId },
+        data: { emailVerifiedAt: now },
+      });
+
+      return true;
+    });
+
+    if (!verified) {
+      throw new AppError("VALIDATION_ERROR", INVALID_LINK_MESSAGE, 400);
+    }
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email,
+        deletedAt: null,
+      },
+    });
+
+    if (!user) {
+      return;
+    }
+
+    const now = new Date();
+    const resetPlain = randomBytes(32).toString("hex");
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(resetPlain),
+        expiresAt: new Date(now.getTime() + HOUR_MS),
+      },
+    });
+
+    const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
+    sendDevLink("reset", `${webUrl}/reset-password?token=${resetPlain}`);
+  }
+
+  async resetPassword(tokenPlain: string, password: string): Promise<void> {
+    const now = new Date();
+    const passwordHash = await hashPassword(password, {
+      algorithm: Algorithm.Argon2id,
+    });
+
+    const reset = await this.prisma.$transaction(async (tx) => {
+      const token = await tx.passwordResetToken.findFirst({
+        where: {
+          tokenHash: hashToken(tokenPlain),
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+      });
+
+      if (!token) {
+        return false;
+      }
+
+      await tx.passwordResetToken.update({
+        where: { id: token.id },
+        data: { usedAt: now },
+      });
+
+      await tx.user.update({
+        where: { id: token.userId },
+        data: { passwordHash },
+      });
+
+      await tx.refreshToken.updateMany({
+        where: {
+          userId: token.userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      return true;
+    });
+
+    if (!reset) {
+      throw new AppError("VALIDATION_ERROR", INVALID_LINK_MESSAGE, 400);
+    }
   }
 
   private toSessionContext(user: SessionUser) {
