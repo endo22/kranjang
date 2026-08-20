@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test test/**/*.test.tsx"
+    "test": "tsx --test test/**/*.test.tsx test/**/*.test.ts"
   },
   "dependencies": {
     "@kranjang/shared": "workspace:^",

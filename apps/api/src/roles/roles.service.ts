@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import type { JwtPayload } from "../auth/tokens.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
@@ -12,7 +12,7 @@ const roleInclude = {
 
 @Injectable()
 export class RolesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: JwtPayload) {
     const roles = await this.prisma.role.findMany({

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 
@@ -25,9 +26,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
     <div className="min-h-screen bg-[#f7f7f8] px-6 py-10 text-[#212121] lg:px-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <div className="flex items-center justify-between gap-4">
-          <Link href="/" className="font-display text-2xl text-[#17171c]">
-            Kranjang
-          </Link>
+          <BrandLogo href="/" size="sm" priority />
           <Link href="/" className="text-sm text-[#616161] transition-colors hover:text-[#17171c]">
             Kembali ke beranda
           </Link>
@@ -37,7 +36,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
           <div className="space-y-4">
             <p className="text-sm uppercase tracking-[0.2em] text-[#75758a]">Akses akun</p>
             <h1 className="font-display text-4xl leading-tight tracking-[-0.03em] text-[#17171c] sm:text-5xl">
-              Kelola warung dengan alur masuk yang sederhana.
+              Kelola toko dengan alur masuk yang sederhana.
             </h1>
             <p className="max-w-xl text-base leading-7 text-[#616161]">
               Masuk, daftar, atau pulihkan akses akun Kranjang untuk melanjutkan operasional usaha Anda.

@@ -1,4 +1,4 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from "@nestjs/common";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrorBody, ErrorCode } from "@kranjang/shared";
 import type { Response } from "express";
 
@@ -127,5 +127,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message: "Terjadi kesalahan. Silakan coba lagi.",
       details: {},
     } satisfies ApiErrorBody);
+
+    const logger = new Logger(HttpExceptionFilter.name);
+    if (process.env.NODE_ENV !== "test") {
+      logger.error(exception instanceof Error ? exception.stack ?? exception.message : exception);
+    }
   }
 }

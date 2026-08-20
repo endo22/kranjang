@@ -1,86 +1,77 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/lib/auth-context";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
-}
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { formatRp, todayIso } from "@/lib/format";
+
+type Dashboard = {
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  expense: number;
+  netProfit: number;
+  transactionCount: number;
+  topProducts: Array<{ name: string; qty: number }>;
+  lowStock: Array<{ name: string; stock: number }>;
+};
 
 export default function DashboardPage() {
   const { session } = useAuth();
+  const [data, setData] = useState<Dashboard | null>(null);
+  const today = todayIso();
+
+  useEffect(() => {
+    void api<Dashboard>(`/dashboard?from=${today}&to=${today}`)
+      .then(setData)
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat dashboard."));
+  }, [today]);
 
   if (!session) {
     return null;
   }
 
-  const trialEnd = new Date(session.tenant.trialEndDate).getTime();
-  const trialDaysRemaining = Math.max(0, Math.ceil((trialEnd - Date.now()) / 86400000));
+  const trialDaysRemaining = Math.max(0, Math.ceil((new Date(session.tenant.trialEndDate).getTime() - Date.now()) / 86400000));
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardTitle>Dashboard</CardTitle>
-            <CardDescription>Ringkasan singkat tenant aktif untuk mulai bekerja di Kranjang.</CardDescription>
+            <CardTitle>Omzet hari ini</CardTitle>
+            <CardDescription>{data ? formatRp(data.revenue) : "…"}</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-[24px] bg-[#17171c] p-5 text-white">
-              <p className="text-sm text-white/70">Sisa masa trial</p>
-              <p className="mt-2 text-4xl font-medium">{trialDaysRemaining} hari</p>
-              <p className="mt-3 text-sm leading-6 text-white/75">
-                Trial berakhir pada {formatDate(session.tenant.trialEndDate)}.
-              </p>
-            </div>
-
-            <div className="rounded-[24px] border border-[#ececf1] p-5">
-              <p className="text-sm text-[#616161]">Status langganan</p>
-              <p className="mt-2 text-2xl font-medium text-[#17171c]">{session.tenant.subscriptionStatus}</p>
-              <p className="mt-3 text-sm leading-6 text-[#616161]">
-                Anda login sebagai {session.user.role}. Menu aktif disesuaikan dengan permission pengguna.
-              </p>
-            </div>
-          </CardContent>
         </Card>
-
         <Card>
           <CardHeader>
-            <CardTitle>Tenant</CardTitle>
-            <CardDescription>Informasi dasar tenant yang sedang Anda gunakan.</CardDescription>
+            <CardTitle>Laba kotor</CardTitle>
+            <CardDescription>{data ? formatRp(data.grossProfit) : "…"}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-[#616161]">
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-[#9a9aa5]">Nama usaha</p>
-              <p className="mt-1 text-base font-medium text-[#17171c]">{session.tenant.name}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-[#9a9aa5]">Pengguna aktif</p>
-              <p className="mt-1 text-base font-medium text-[#17171c]">{session.user.name}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-[#9a9aa5]">Email</p>
-              <p className="mt-1 text-base font-medium text-[#17171c]">{session.user.email}</p>
-            </div>
-          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Laba bersih</CardTitle>
+            <CardDescription>{data ? formatRp(data.netProfit) : "…"}</CardDescription>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Trial</CardTitle>
+            <CardDescription>{trialDaysRemaining} hari · {session.tenant.subscriptionStatus}</CardDescription>
+          </CardHeader>
         </Card>
       </div>
-
       <Card>
         <CardHeader>
-          <CardTitle>Belum ada data operasional</CardTitle>
-          <CardDescription>Modul inti POS belum dibuka pada fase ini.</CardDescription>
+          <CardTitle>Stok menipis</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-[24px] border border-dashed border-[#d9d9dd] bg-[#fcfcfd] p-8">
-            <p className="text-base leading-7 text-[#616161]">
-              Isi produk dan resep di tahap berikutnya, lalu jual di kasir.
-            </p>
-          </div>
+          {data?.lowStock.length ? data.lowStock.map((row) => (
+            <p key={row.name} className="text-sm">{row.name}: {row.stock}</p>
+          )) : <p className="text-sm text-[#616161]">Tidak ada peringatan stok.</p>}
         </CardContent>
       </Card>
     </div>

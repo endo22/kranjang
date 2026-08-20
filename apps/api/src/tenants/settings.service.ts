@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { patchSettingsSchema } from "@kranjang/shared";
 import type { Prisma } from "@kranjang/db";
 import type { z } from "zod";
@@ -13,7 +13,7 @@ type TenantWithSettings = Prisma.TenantGetPayload<{
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async get(currentUser: JwtPayload) {
     return this.toSettingsResponse(await this.getScopedTenant(currentUser.tid));

@@ -21,7 +21,7 @@ export function uniqueEmail(): string {
 
 export function registerBody(overrides: Partial<RegisterBody> = {}): RegisterBody {
   return {
-    businessName: "Warung Nasi Goreng Pak Budi",
+    businessName: "Toko Budi",
     ownerName: "Budi",
     email: uniqueEmail(),
     password: "password12",

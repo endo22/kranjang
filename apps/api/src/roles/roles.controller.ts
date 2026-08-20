@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
@@ -10,7 +10,7 @@ import { RolesService } from "./roles.service.js";
 @Controller("roles")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class RolesController {
-  constructor(private readonly rolesService: RolesService) {}
+  constructor(@Inject(RolesService) private readonly rolesService: RolesService) {}
 
   @Get()
   @RequirePermissions("user.manage")

@@ -91,7 +91,7 @@ describe("me and settings", () => {
   it("gets and patches tenant settings for users with settings.manage", async () => {
     const created = await register(app, {
       email: uniqueEmail(),
-      businessName: "Warung Satu",
+      businessName: "Toko Satu",
       phone: "081234567890",
     });
     const auth = bearer(created.body.accessToken);
@@ -100,7 +100,7 @@ describe("me and settings", () => {
 
     expect(settings.status).toBe(200);
     expect(settings.body).toMatchObject({
-      name: "Warung Satu",
+      name: "Toko Satu",
       phone: "081234567890",
       timezone: "Asia/Jakarta",
       allowNegativeStock: false,
@@ -112,7 +112,7 @@ describe("me and settings", () => {
     expect(settings.body.trialEndDate).toEqual(expect.any(String));
 
     const patched = await request(app.getHttpServer()).patch("/api/v1/settings").set(auth).send({
-      name: "Warung Dua",
+      name: "Toko Dua",
       phone: null,
       timezone: "Asia/Jakarta",
       allowNegativeStock: true,
@@ -123,7 +123,7 @@ describe("me and settings", () => {
 
     expect(patched.status).toBe(200);
     expect(patched.body).toMatchObject({
-      name: "Warung Dua",
+      name: "Toko Dua",
       phone: null,
       timezone: "Asia/Jakarta",
       allowNegativeStock: true,
@@ -148,7 +148,7 @@ describe("me and settings", () => {
     expect(audit).toBeTruthy();
     expect(audit?.userId).toBe(created.body.user.id);
     expect(audit?.oldValue).toMatchObject({
-      name: "Warung Satu",
+      name: "Toko Satu",
       phone: "081234567890",
       allowNegativeStock: false,
       taxPercent: 0,
@@ -156,7 +156,7 @@ describe("me and settings", () => {
       receiptFooter: null,
     });
     expect(audit?.newValue).toMatchObject({
-      name: "Warung Dua",
+      name: "Toko Dua",
       phone: null,
       allowNegativeStock: true,
       taxPercent: 11,

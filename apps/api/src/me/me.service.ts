@@ -1,5 +1,5 @@
 import { Algorithm, hash as hashPassword, verify as verifyPassword } from "@node-rs/argon2";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { changePasswordSchema, patchMeSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -11,7 +11,7 @@ type ChangePasswordBody = z.infer<typeof changePasswordSchema>;
 
 @Injectable()
 export class MeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async get(currentUser: JwtPayload) {
     return this.toMeResponse(await this.getScopedUser(currentUser));

@@ -59,8 +59,8 @@ describe("POST /api/v1/auth/register", () => {
   });
 
   it("makes unique slugs for the same business name", async () => {
-    const a = await register(app, { businessName: "Warung Sama" });
-    const b = await register(app, { businessName: "Warung Sama" });
+    const a = await register(app, { businessName: "Toko Sama" });
+    const b = await register(app, { businessName: "Toko Sama" });
     expect(a.status).toBe(201);
     expect(b.status).toBe(201);
     expect(a.body.tenant.slug).not.toBe(b.body.tenant.slug);

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Patch, UseGuards } from "@nestjs/common";
 import { patchSettingsSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -16,7 +16,7 @@ type PatchSettingsBody = z.infer<typeof patchSettingsSchema>;
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @RequirePermissions("settings.manage")
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(@Inject(SettingsService) private readonly settingsService: SettingsService) {}
 
   @Get()
   async get(@CurrentUser() currentUser: JwtPayload | undefined) {

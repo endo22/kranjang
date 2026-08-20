@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { createUserSchema, updateUserSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -17,7 +17,7 @@ type UpdateBody = z.infer<typeof updateUserSchema>;
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @RequirePermissions("user.manage")
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(@Inject(UsersService) private readonly usersService: UsersService) {}
 
   @Get()
   async list(@CurrentUser() currentUser: JwtPayload | undefined) {

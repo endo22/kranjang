@@ -18,7 +18,11 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: "Kranjang",
-  description: "Landing marketing Kranjang untuk pemilik warung dan rumah makan.",
+  description: "Landing marketing Kranjang untuk pemilik toko.",
+  icons: {
+    icon: "/LogoKranjang.jpg",
+    apple: "/LogoKranjang.jpg",
+  },
 };
 
 export default function RootLayout({

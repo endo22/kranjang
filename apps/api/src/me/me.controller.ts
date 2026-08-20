@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Patch, Post, UseGuards } from "@nestjs/common";
 import { changePasswordSchema, patchMeSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -14,7 +14,7 @@ type ChangePasswordBody = z.infer<typeof changePasswordSchema>;
 @Controller("me")
 @UseGuards(JwtAuthGuard)
 export class MeController {
-  constructor(private readonly meService: MeService) {}
+  constructor(@Inject(MeService) private readonly meService: MeService) {}
 
   @Get()
   async get(@CurrentUser() currentUser: JwtPayload | undefined) {

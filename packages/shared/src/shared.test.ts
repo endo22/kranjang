@@ -20,6 +20,8 @@ describe("shared contracts", () => {
       "CONFLICT",
       "RATE_LIMITED",
       "INTERNAL_ERROR",
+      "STOCK_INSUFFICIENT",
+      "SUBSCRIPTION_INACTIVE",
     ]);
   });
 
@@ -42,7 +44,7 @@ describe("shared contracts", () => {
 
   it("rejects short password and short phone", () => {
     const parsed = registerSchema.safeParse({
-      businessName: "Warung",
+      businessName: "Toko",
       ownerName: "Budi",
       email: "budi@example.com",
       password: "short",
@@ -53,7 +55,7 @@ describe("shared contracts", () => {
 
   it("accepts valid register and login bodies", () => {
     const reg = registerSchema.parse({
-      businessName: "Warung Nasi Goreng Pak Budi",
+      businessName: "Toko Budi",
       ownerName: "Budi",
       email: "budi@example.com",
       password: "password12",

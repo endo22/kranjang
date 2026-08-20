@@ -69,7 +69,7 @@ export default function RegisterPage() {
               id="businessName"
               value={form.businessName}
               onChange={(event) => setForm((current) => ({ ...current, businessName: event.target.value }))}
-              placeholder="Warung Nusantara"
+              placeholder="Toko Nusantara"
             />
           </div>
 

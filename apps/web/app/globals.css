@@ -17,6 +17,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-destructive: var(--destructive);
+  --color-white: #ffffff;
 }
 
 * {

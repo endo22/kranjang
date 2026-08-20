@@ -1,5 +1,5 @@
 import { Algorithm, hash as hashPassword } from "@node-rs/argon2";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { createUserSchema, updateUserSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import { AppError } from "../common/app-error.js";
@@ -45,7 +45,7 @@ function hasUniqueTarget(error: unknown, field: string): boolean {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: JwtPayload) {
     const users = await this.prisma.user.findMany({

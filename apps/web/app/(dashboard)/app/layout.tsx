@@ -10,14 +10,18 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth-context";
 
 const GUARDED_ROUTES = [
-  {
-    prefix: "/app/users",
-    permission: "user.manage",
-  },
-  {
-    prefix: "/app/settings",
-    permission: "settings.manage",
-  },
+  { prefix: "/app/users", permission: "user.manage" },
+  { prefix: "/app/settings", permission: "settings.manage" },
+  { prefix: "/app/products", permission: "product.view" },
+  { prefix: "/app/inventory", permission: "inventory.view" },
+  { prefix: "/app/purchases", permission: "purchase.view" },
+  { prefix: "/app/suppliers", permission: "purchase.view" },
+  { prefix: "/app/sales", permission: "sales.view" },
+  { prefix: "/app/customers", permission: "sales.view" },
+  { prefix: "/app/cashier", permission: "sales.create" },
+  { prefix: "/app/expenses", permission: "expense.view" },
+  { prefix: "/app/reports", permission: "report.view" },
+  { prefix: "/app/subscription", permission: "subscription.manage" },
 ] as const;
 
 function ShellSkeleton() {

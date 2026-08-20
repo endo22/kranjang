@@ -1,5 +1,5 @@
 import { Algorithm, hash as hashPassword, verify as verifyPassword } from "@node-rs/argon2";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { randomBytes } from "node:crypto";
 import { EXPENSE_CATEGORY_NAMES, LoginBody, RegisterBody } from "@kranjang/shared";
@@ -103,8 +103,8 @@ function hasUniqueTarget(error: unknown, field: string): boolean {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly jwt: JwtService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(JwtService) private readonly jwt: JwtService,
   ) {}
 
   async register(body: RegisterBody): Promise<AuthResult> {

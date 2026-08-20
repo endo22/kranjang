@@ -29,7 +29,7 @@ function createRegisterDeps() {
           return null;
         }
 
-        if (slug === "warung-sama") {
+        if (slug === "toko-sama") {
           return { id: "tenant-existing", slug };
         }
 
@@ -109,8 +109,8 @@ function createSessionUser() {
     emailVerifiedAt: null,
     tenant: {
       id: "tenant-1",
-      name: "Warung Budi",
-      slug: "warung-budi",
+      name: "Toko Budi",
+      slug: "toko-budi",
       subscriptionStatus: "TRIAL",
       trialEndDate: new Date("2026-09-17T00:00:00.000Z"),
     },
@@ -152,7 +152,7 @@ describe("AuthService.register", () => {
     const service = new AuthService(prisma as never, new JwtService({ secret: "test-secret" }));
 
     const result = await service.register({
-      businessName: "Warung Sama",
+      businessName: "Toko Sama",
       ownerName: "Budi",
       email: "owner@example.com",
       password: "password12",
@@ -161,8 +161,8 @@ describe("AuthService.register", () => {
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
     expect(state.createdSlugs).toHaveLength(2);
-    expect(state.createdSlugs[0]).toBe("warung-sama");
-    expect(state.createdSlugs[1]).toMatch(/^warung-sama-[a-f0-9]{4}$/);
+    expect(state.createdSlugs[0]).toBe("toko-sama");
+    expect(state.createdSlugs[1]).toMatch(/^toko-sama-[a-f0-9]{4}$/);
     expect(result.tenant.slug).toBe(state.createdSlugs[1]);
   });
 
@@ -176,7 +176,7 @@ describe("AuthService.register", () => {
 
     await expect(
       service.register({
-        businessName: "Warung Email",
+        businessName: "Toko Email",
         ownerName: "Budi",
         email: "owner@example.com",
         password: "password12",

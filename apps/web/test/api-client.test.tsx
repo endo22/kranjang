@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 
-import { api, clearAccessToken, getAccessToken, setAccessToken, setSessionExpiredHandler, ApiError } from "../lib/api";
+import { api, clearAccessToken, getAccessToken, jsonInit, setAccessToken, setSessionExpiredHandler, ApiError } from "../lib/api";
 
 function unauthorizedResponse() {
   return new Response(
@@ -80,8 +80,8 @@ describe("api client", () => {
           },
           tenant: {
             id: "tenant-1",
-            name: "Warung Budi",
-            slug: "warung-budi",
+            name: "Toko Budi",
+            slug: "toko-budi",
             subscriptionStatus: "TRIAL",
             trialEndDate: "2026-12-01T00:00:00.000Z",
           },
@@ -152,5 +152,11 @@ describe("api client", () => {
 
     assert.equal(fetchMock.mock.calls.length, 1);
     assert.equal(sessionExpiredCalls, 0);
+  });
+
+  it("jsonInit serializes objects once", () => {
+    const init = jsonInit({ openingCash: 0 });
+    assert.equal(init.body, '{"openingCash":0}');
+    assert.equal(new Headers(init.headers).get("content-type"), "application/json");
   });
 });

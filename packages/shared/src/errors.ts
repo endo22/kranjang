@@ -6,6 +6,8 @@ export const ERROR_CODES = [
   "CONFLICT",
   "RATE_LIMITED",
   "INTERNAL_ERROR",
+  "STOCK_INSUFFICIENT",
+  "SUBSCRIPTION_INACTIVE",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
