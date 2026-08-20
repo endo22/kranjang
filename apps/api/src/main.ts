@@ -16,13 +16,7 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser());
   app.setGlobalPrefix("api/v1");
   await app.listen(Number(process.env.PORT || 3001));
-  try {
-    await app.get(AdminService, { strict: false }).ensureSeedAdmin();
-  } catch (error) {
-    if (!(error instanceof Error) || error.name !== "UnknownElementException") {
-      throw error;
-    }
-  }
+  await app.get(AdminService).ensureSeedAdmin();
 }
 
 void bootstrap();
