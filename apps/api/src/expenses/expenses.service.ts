@@ -18,9 +18,20 @@ export class ExpensesService {
     });
   }
 
-  async list(currentUser: JwtPayload) {
+  async list(currentUser: JwtPayload, range: { from?: string; to?: string } = {}) {
+    const expenseDate =
+      range.from || range.to
+        ? {
+            ...(range.from ? { gte: new Date(`${range.from}T00:00:00.000Z`) } : {}),
+            ...(range.to ? { lte: new Date(`${range.to}T23:59:59.999Z`) } : {}),
+          }
+        : undefined;
     const rows = await this.prisma.expense.findMany({
-      where: { tenantId: currentUser.tid, deletedAt: null },
+      where: {
+        tenantId: currentUser.tid,
+        deletedAt: null,
+        ...(expenseDate ? { expenseDate } : {}),
+      },
       include: { category: true },
       orderBy: { expenseDate: "desc" },
     });
@@ -96,6 +107,7 @@ export class ExpensesService {
     amount: unknown;
     expenseDate: Date;
     paymentMethod: string;
+    categoryId: string;
     category: { id: string; name: string };
   }) {
     return {
@@ -104,6 +116,7 @@ export class ExpensesService {
       amount: asNumber(row.amount),
       expenseDate: row.expenseDate.toISOString().slice(0, 10),
       paymentMethod: row.paymentMethod,
+      categoryId: row.categoryId,
       category: row.category,
     };
   }

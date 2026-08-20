@@ -115,6 +115,10 @@ export const saleSchema = z.object({
     .min(1),
 });
 
+export const saleCancelSchema = z.object({
+  reason: z.string().trim().min(2).max(255),
+});
+
 export const expenseSchema = z.object({
   categoryId: z.string().uuid(),
   description: z.string().trim().min(2).max(255),
@@ -122,6 +126,13 @@ export const expenseSchema = z.object({
   expenseDate: z.string().min(8).max(32),
   paymentMethod: z.enum(["CASH", "QRIS", "TRANSFER", "EWALLET", "CARD"]),
   attachmentPath: optionalText,
+});
+
+export const dateRangeQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  status: z.string().trim().max(40).optional(),
+  q: z.string().trim().max(120).optional(),
 });
 
 export const reportQuerySchema = z.object({

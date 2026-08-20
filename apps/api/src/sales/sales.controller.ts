@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, UseGuards } from "@nestjs/common";
-import { cashierCloseSchema, cashierOpenSchema, saleSchema } from "@kranjang/shared";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { cashierCloseSchema, cashierOpenSchema, dateRangeQuerySchema, saleCancelSchema, saleSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
@@ -40,8 +40,17 @@ export class SalesController {
 
   @Get("sales")
   @RequirePermissions("sales.view")
-  list(@CurrentUser() user: JwtPayload | undefined) {
-    return this.salesService.listSales(this.require(user));
+  list(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("status") status?: string,
+  ) {
+    const parsed = dateRangeQuerySchema.safeParse({ from, to, status });
+    if (!parsed.success) {
+      throw new AppError("VALIDATION_ERROR", "Data tidak valid", 400, { issues: parsed.error.issues });
+    }
+    return this.salesService.listSales(this.require(user), parsed.data);
   }
 
   @Get("sales/:id")
@@ -59,8 +68,12 @@ export class SalesController {
 
   @Post("sales/:id/cancel")
   @RequirePermissions("sales.cancel")
-  cancel(@CurrentUser() user: JwtPayload | undefined, @Param("id") id: string) {
-    return this.salesService.cancelSale(this.require(user), id);
+  cancel(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Param("id") id: string,
+    @Body(new ZodPipe(saleCancelSchema)) body: z.infer<typeof saleCancelSchema>,
+  ) {
+    return this.salesService.cancelSale(this.require(user), id, body);
   }
 
   private require(user: JwtPayload | undefined): JwtPayload {

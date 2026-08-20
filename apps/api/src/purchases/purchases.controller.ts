@@ -40,6 +40,12 @@ export class PurchasesController {
     return this.purchasesService.receive(this.require(user), id);
   }
 
+  @Post(":id/cancel")
+  @RequirePermissions("purchase.create")
+  cancel(@CurrentUser() user: JwtPayload | undefined, @Param("id") id: string) {
+    return this.purchasesService.cancelDraft(this.require(user), id);
+  }
+
   private require(user: JwtPayload | undefined): JwtPayload {
     if (!user) {
       throw new AppError("UNAUTHORIZED", "Akses tidak sah", 401);

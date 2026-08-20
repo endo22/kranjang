@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@kranjang/db";
-import type { cashierCloseSchema, cashierOpenSchema, saleSchema } from "@kranjang/shared";
+import type { cashierCloseSchema, cashierOpenSchema, dateRangeQuerySchema, saleCancelSchema, saleSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
@@ -86,9 +86,20 @@ export class SalesService {
     });
   }
 
-  async listSales(currentUser: JwtPayload) {
+  async listSales(currentUser: JwtPayload, query: z.infer<typeof dateRangeQuerySchema> = {}) {
+    const soldAt =
+      query.from || query.to
+        ? {
+            ...(query.from ? { gte: new Date(`${query.from}T00:00:00.000Z`) } : {}),
+            ...(query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
+          }
+        : undefined;
     const rows = await this.prisma.sale.findMany({
-      where: { tenantId: currentUser.tid },
+      where: {
+        tenantId: currentUser.tid,
+        ...(query.status ? { status: query.status } : {}),
+        ...(soldAt ? { soldAt } : {}),
+      },
       include: { items: true, payments: true, customer: true },
       orderBy: { soldAt: "desc" },
       take: 100,
@@ -268,7 +279,7 @@ export class SalesService {
     });
   }
 
-  async cancelSale(currentUser: JwtPayload, id: string) {
+  async cancelSale(currentUser: JwtPayload, id: string, body: z.infer<typeof saleCancelSchema>) {
     const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
     assertWritableSubscription(tenant.subscriptionStatus);
 
@@ -303,8 +314,22 @@ export class SalesService {
 
       const updated = await tx.sale.update({
         where: { id: sale.id },
-        data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: currentUser.sub },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          cancelledById: currentUser.sub,
+          notes: body.reason,
+        },
         include: { items: true, payments: true, customer: true },
+      });
+      await writeAudit(tx, {
+        tenantId: currentUser.tid,
+        userId: currentUser.sub,
+        action: "CANCEL",
+        module: "sales",
+        entity: "sale",
+        entityId: sale.id,
+        newValue: { reason: body.reason },
       });
       return this.toSale(updated);
     });
@@ -363,6 +388,7 @@ export class SalesService {
     taxAmount: unknown;
     totalNet: unknown;
     status: string;
+    notes: string | null;
     customer: { id: string; name: string } | null;
     items: Array<{
       productId: string;
@@ -383,6 +409,7 @@ export class SalesService {
       taxAmount: asNumber(row.taxAmount),
       totalNet: asNumber(row.totalNet),
       status: row.status,
+      notes: row.notes,
       customer: row.customer,
       items: row.items.map((item) => ({
         productId: item.productId,

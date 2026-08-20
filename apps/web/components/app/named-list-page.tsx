@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api, jsonInit } from "@/lib/api";
 
+type Row = { id: string; name: string; phone?: string | null };
+
 export default function NamedListPage({
   title,
   path,
@@ -17,17 +19,26 @@ export default function NamedListPage({
   path: string;
   extraFields?: boolean;
 }) {
-  const [rows, setRows] = useState<Array<{ id: string; name: string }>>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [query, setQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  async function load() {
-    setRows(await api(path));
+  async function load(search = query) {
+    const suffix = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "";
+    setRows(await api(`${path}${suffix}`));
   }
 
   useEffect(() => {
-    void load().catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+    void load("").catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
   }, [path]);
+
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setPhone("");
+  }
 
   return (
     <Card>
@@ -39,23 +50,73 @@ export default function NamedListPage({
           className="flex flex-col gap-3 sm:flex-row"
           onSubmit={(event) => {
             event.preventDefault();
-            void api(path, { method: "POST", ...jsonInit({ name, phone: extraFields ? phone : undefined }) })
+            void load(query).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+          }}
+        >
+          <Input placeholder="Cari nama/telepon" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <Button type="submit" variant="outline">
+            Cari
+          </Button>
+        </form>
+
+        <form
+          className="flex flex-col gap-3 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const payload = { name, phone: extraFields ? phone || null : undefined };
+            const request = editingId
+              ? api(`${path}/${editingId}`, { method: "PATCH", ...jsonInit(payload) })
+              : api(path, { method: "POST", ...jsonInit(payload) });
+            void request
               .then(() => {
-                setName("");
+                resetForm();
                 return load();
               })
               .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
           }}
         >
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nama" required />
-          {extraFields ? <Input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Telepon" /> : null}
-          <Button type="submit">Tambah</Button>
+          <Input placeholder="Nama" value={name} onChange={(event) => setName(event.target.value)} required />
+          {extraFields ? <Input placeholder="Telepon" value={phone} onChange={(event) => setPhone(event.target.value)} /> : null}
+          <Button type="submit">{editingId ? "Simpan" : "Tambah"}</Button>
+          {editingId ? (
+            <Button type="button" variant="outline" onClick={resetForm}>
+              Batal
+            </Button>
+          ) : null}
         </form>
-        <ul className="space-y-2 text-sm">
-          {rows.map((row) => (
-            <li key={row.id} className="rounded-2xl border px-4 py-3">{row.name}</li>
-          ))}
-        </ul>
+
+        {rows.map((row) => (
+          <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm">
+            <span>
+              {row.name}
+              {row.phone ? ` · ${row.phone}` : ""}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingId(row.id);
+                  setName(row.name);
+                  setPhone(row.phone ?? "");
+                }}
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void api(`${path}/${row.id}`, { method: "DELETE" })
+                    .then(() => load())
+                    .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+                }}
+              >
+                Nonaktif
+              </Button>
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

@@ -517,7 +517,8 @@ Overflow masuk lampiran **Next**, bukan diam-diam menambah §5.3.
 - [x] Dokumen ini: `docs/prd/kranjang-prd-phase-9-power.md`
 - [x] Disetujui produk (20 Agustus 2026)
 - [x] Implementation plan Blok A: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-a.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-a.md)
-- [ ] Plan Blok B/C setelah Blok A selesai
+- [x] Implementation plan Blok B: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-b.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-b.md)
+- [ ] Plan Blok C setelah Blok B selesai
 - [x] Update pointer roadmap di [kranjang-prd.md](./kranjang-prd.md) §18.
 
 ---

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { customerSchema, supplierSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -17,8 +17,8 @@ export class PartnersController {
 
   @Get("suppliers")
   @RequirePermissions("purchase.view")
-  listSuppliers(@CurrentUser() user: JwtPayload | undefined) {
-    return this.partnersService.listSuppliers(this.require(user));
+  listSuppliers(@CurrentUser() user: JwtPayload | undefined, @Query("q") q?: string) {
+    return this.partnersService.listSuppliers(this.require(user), q);
   }
 
   @Post("suppliers")
@@ -46,8 +46,8 @@ export class PartnersController {
 
   @Get("customers")
   @RequirePermissions("sales.view")
-  listCustomers(@CurrentUser() user: JwtPayload | undefined) {
-    return this.partnersService.listCustomers(this.require(user));
+  listCustomers(@CurrentUser() user: JwtPayload | undefined, @Query("q") q?: string) {
+    return this.partnersService.listCustomers(this.require(user), q);
   }
 
   @Post("customers")

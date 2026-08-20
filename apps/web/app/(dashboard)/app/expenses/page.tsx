@@ -10,7 +10,15 @@ import { api, jsonInit } from "@/lib/api";
 import { formatRp, todayIso } from "@/lib/format";
 
 type Category = { id: string; name: string };
-type Expense = { id: string; description: string; amount: number; category: { name: string } };
+type Expense = {
+  id: string;
+  description: string;
+  amount: number;
+  expenseDate?: string;
+  categoryId?: string;
+  paymentMethod?: string;
+  category: { name: string };
+};
 
 export default function ExpensesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -18,9 +26,16 @@ export default function ExpensesPage() {
   const [categoryId, setCategoryId] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("0");
+  const [from, setFrom] = useState(todayIso());
+  const [to, setTo] = useState(todayIso());
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function load() {
-    const [nextCategories, nextRows] = await Promise.all([api<Category[]>("/expense-categories"), api<Expense[]>("/expenses")]);
+    const params = new URLSearchParams({ from, to });
+    const [nextCategories, nextRows] = await Promise.all([
+      api<Category[]>("/expense-categories"),
+      api<Expense[]>(`/expenses?${params.toString()}`),
+    ]);
     setCategories(nextCategories);
     setRows(nextRows);
     setCategoryId((value) => value || nextCategories[0]?.id || "");
@@ -30,6 +45,12 @@ export default function ExpensesPage() {
     void load().catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
   }, []);
 
+  function resetForm() {
+    setEditingId(null);
+    setDescription("");
+    setAmount("0");
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -37,21 +58,36 @@ export default function ExpensesPage() {
       </CardHeader>
       <CardContent className="space-y-4">
         <form
+          className="flex flex-wrap gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void load().catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+          }}
+        >
+          <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <Button type="submit" variant="outline">
+            Filter
+          </Button>
+        </form>
+
+        <form
           className="grid gap-3 sm:grid-cols-4"
           onSubmit={(event) => {
             event.preventDefault();
-            void api("/expenses", {
-              method: "POST",
-              ...jsonInit({
-                categoryId,
-                description,
-                amount: Number(amount),
-                expenseDate: todayIso(),
-                paymentMethod: "CASH",
-              }),
-            })
+            const payload = {
+              categoryId,
+              description,
+              amount: Number(amount),
+              expenseDate: todayIso(),
+              paymentMethod: "CASH" as const,
+            };
+            const request = editingId
+              ? api(`/expenses/${editingId}`, { method: "PATCH", ...jsonInit(payload) })
+              : api("/expenses", { method: "POST", ...jsonInit(payload) });
+            void request
               .then(() => {
-                setDescription("");
+                resetForm();
                 return load();
               })
               .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
@@ -59,15 +95,47 @@ export default function ExpensesPage() {
         >
           <select className="h-11 rounded-2xl border px-3" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
             {categories.map((row) => (
-              <option key={row.id} value={row.id}>{row.name}</option>
+              <option key={row.id} value={row.id}>
+                {row.name}
+              </option>
             ))}
           </select>
           <Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Deskripsi" required />
           <Input type="number" value={amount} onChange={(event) => setAmount(event.target.value)} />
-          <Button type="submit">Simpan</Button>
+          <Button type="submit">{editingId ? "Simpan" : "Tambah"}</Button>
         </form>
+
         {rows.map((row) => (
-          <p key={row.id} className="text-sm">{row.category.name} · {row.description} · {formatRp(row.amount)}</p>
+          <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm">
+            <span>
+              {row.category.name} · {row.description} · {formatRp(row.amount)}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingId(row.id);
+                  setDescription(row.description);
+                  setAmount(String(row.amount));
+                  setCategoryId(row.categoryId ?? categories[0]?.id ?? "");
+                }}
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void api(`/expenses/${row.id}`, { method: "DELETE" })
+                    .then(() => load())
+                    .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+                }}
+              >
+                Hapus
+              </Button>
+            </div>
+          </div>
         ))}
       </CardContent>
     </Card>

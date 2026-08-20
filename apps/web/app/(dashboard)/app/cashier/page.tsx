@@ -20,6 +20,7 @@ import {
 type Product = CashierProduct;
 type CartItem = CashierCartItem;
 type Category = { id: string; name: string };
+type Customer = { id: string; name: string };
 type CashierCloseSummary = {
   salesCount: number;
   salesTotal: number;
@@ -63,6 +64,8 @@ export default function CashierPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [method, setMethod] = useState("CASH");
+  const [customerId, setCustomerId] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [openingCash, setOpeningCash] = useState("0");
   const [closingCash, setClosingCash] = useState("0");
   const [discount, setDiscount] = useState("0");
@@ -70,16 +73,18 @@ export default function CashierPage() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
-    const [nextProducts, nextCategories, nextSettings, current] = await Promise.all([
+    const [nextProducts, nextCategories, nextSettings, current, nextCustomers] = await Promise.all([
       api<Product[]>("/products"),
       api<Category[]>("/categories"),
       api<SettingsRecord>("/settings"),
       api<{ id: string } | null>("/cashier-sessions/current"),
+      api<Customer[]>("/customers"),
     ]);
     setProducts(nextProducts);
     setCategories(nextCategories);
     setSettings(nextSettings);
     setSession(current);
+    setCustomers(nextCustomers);
   }
 
   useEffect(() => {
@@ -347,6 +352,14 @@ export default function CashierPage() {
               {settings ? `Pajak tenant ${settings.taxPercent}%` : "Pengaturan pajak dimuat dari tenant."}
             </p>
           </div>
+          <select className="h-11 w-full rounded-2xl border px-3" value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
+            <option value="">Pelanggan umum</option>
+            {customers.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+          </select>
           <select className="h-11 w-full rounded-2xl border px-3" value={method} onChange={(event) => setMethod(event.target.value)}>
             <option>CASH</option>
             <option>QRIS</option>
@@ -364,6 +377,7 @@ export default function CashierPage() {
                 ...jsonInit({
                   paymentMethod: method,
                   discountAmount,
+                  customerId: customerId || undefined,
                   items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
                 }),
               })
@@ -372,6 +386,7 @@ export default function CashierPage() {
                   toast.success("Transaksi tersimpan.");
                   setCart([]);
                   setDiscount("0");
+                  setCustomerId("");
                   setQuery("");
                   void load();
                 })

@@ -10,9 +10,13 @@ import { PrismaService } from "../prisma/prisma.service.js";
 export class PartnersService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  listSuppliers(currentUser: JwtPayload) {
+  listSuppliers(currentUser: JwtPayload, q?: string) {
     return this.prisma.supplier.findMany({
-      where: { tenantId: currentUser.tid, deletedAt: null },
+      where: {
+        tenantId: currentUser.tid,
+        deletedAt: null,
+        ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] } : {}),
+      },
       orderBy: { name: "asc" },
     });
   }
@@ -52,9 +56,13 @@ export class PartnersService {
     return { success: true };
   }
 
-  listCustomers(currentUser: JwtPayload) {
+  listCustomers(currentUser: JwtPayload, q?: string) {
     return this.prisma.customer.findMany({
-      where: { tenantId: currentUser.tid, deletedAt: null },
+      where: {
+        tenantId: currentUser.tid,
+        deletedAt: null,
+        ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] } : {}),
+      },
       orderBy: { name: "asc" },
     });
   }

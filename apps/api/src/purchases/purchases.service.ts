@@ -93,6 +93,9 @@ export class PurchasesService {
       if (purchase.documentStatus === "RECEIVED") {
         throw new AppError("VALIDATION_ERROR", "Pembelian sudah diterima.", 400);
       }
+      if (purchase.documentStatus === "CANCELLED") {
+        throw new AppError("VALIDATION_ERROR", "Pembelian sudah dibatalkan.", 400);
+      }
 
       for (const item of purchase.items) {
         await applyStockMovement(tx, {
@@ -117,6 +120,35 @@ export class PurchasesService {
       });
       return this.toPurchase(updated);
     });
+  }
+
+  async cancelDraft(currentUser: JwtPayload, id: string) {
+    const { tenant } = await requireTenantOutlet(this.prisma, currentUser);
+    assertWritableSubscription(tenant.subscriptionStatus);
+    const purchase = await this.prisma.purchase.findFirst({
+      where: { id, tenantId: currentUser.tid },
+      include: { supplier: true, items: true },
+    });
+    if (!purchase) {
+      throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
+    }
+    if (purchase.documentStatus !== "DRAFT") {
+      throw new AppError("VALIDATION_ERROR", "Hanya draft yang bisa dibatalkan.", 400);
+    }
+    const updated = await this.prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { documentStatus: "CANCELLED" },
+      include: { supplier: true, items: true },
+    });
+    await writeAudit(this.prisma, {
+      tenantId: currentUser.tid,
+      userId: currentUser.sub,
+      action: "CANCEL",
+      module: "purchase",
+      entity: "purchase",
+      entityId: purchase.id,
+    });
+    return this.toPurchase(updated);
   }
 
   private toPurchase(row: {

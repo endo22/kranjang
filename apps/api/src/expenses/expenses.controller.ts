@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { expenseSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -23,8 +23,8 @@ export class ExpensesController {
 
   @Get("expenses")
   @RequirePermissions("expense.view")
-  list(@CurrentUser() user: JwtPayload | undefined) {
-    return this.expensesService.list(this.require(user));
+  list(@CurrentUser() user: JwtPayload | undefined, @Query("from") from?: string, @Query("to") to?: string) {
+    return this.expensesService.list(this.require(user), { from, to });
   }
 
   @Post("expenses")
