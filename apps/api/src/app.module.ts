@@ -9,9 +9,22 @@ import { PrismaModule } from "./prisma/prisma.module.js";
 import { RolesModule } from "./roles/roles.module.js";
 import { TenantsModule } from "./tenants/tenants.module.js";
 import { UsersModule } from "./users/users.module.js";
+import { CatalogModule } from "./catalog/catalog.module.js";
+import { InventoryModule } from "./inventory/inventory.module.js";
+import { SalesModule } from "./sales/sales.module.js";
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, RolesModule, MeModule, TenantsModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    RolesModule,
+    MeModule,
+    TenantsModule,
+    CatalogModule,
+    InventoryModule,
+    SalesModule,
+  ],
   providers: [
     {
       provide: APP_FILTER,
