@@ -196,6 +196,25 @@ describe("phase 9 block A", () => {
     await app.close();
   }, 60000);
 
+  it("rejects invalid movement query params with validation error", async () => {
+    const app = await createApp();
+    const email = uniqueEmail();
+    const created = await register(app, { email, businessName: `Warung ${email.slice(0, 8)}` });
+    expect(created.status).toBe(201);
+    const auth = { Authorization: `Bearer ${created.body.accessToken}` };
+    const server = request(app.getHttpServer());
+
+    const badProductId = await server.get("/api/v1/inventory/movements?productId=not-a-uuid").set(auth);
+    expect(badProductId.status).toBe(400);
+    expect(badProductId.body.code).toBe("VALIDATION_ERROR");
+
+    const badFrom = await server.get("/api/v1/inventory/movements?from=not-a-date").set(auth);
+    expect(badFrom.status).toBe(400);
+    expect(badFrom.body.code).toBe("VALIDATION_ERROR");
+
+    await app.close();
+  }, 60000);
+
   it("closes cashier session with cash difference summary", async () => {
     const app = await createApp();
     const email = uniqueEmail();

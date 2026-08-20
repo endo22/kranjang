@@ -15,3 +15,7 @@ Selesai dengan TDD untuk dua requirement: filter `GET /inventory/movements` dan 
 
 ## Catatan
 - Commit task ini perlu ikut men-stage modul inventory yang masih untracked di tree kerja saat ini.
+
+## Addendum 2026-08-20
+- `GET /inventory/movements` sekarang memvalidasi `from`, `to`, dan `productId` di controller sebelum masuk ke Prisma.
+- Query yang invalid mengembalikan `400 VALIDATION_ERROR`, dan ada regresi test untuk `productId` UUID buruk serta `from` yang bukan tanggal.

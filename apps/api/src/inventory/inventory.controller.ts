@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/common";
 import { inventoryAdjustSchema } from "@kranjang/shared";
-import type { z } from "zod";
+import { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
@@ -9,6 +9,12 @@ import { PermissionsGuard } from "../common/permissions.guard.js";
 import { RequirePermissions } from "../common/require-permissions.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { InventoryService } from "./inventory.service.js";
+
+const inventoryMovementsQuerySchema = z.object({
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  productId: z.string().uuid().optional(),
+});
 
 @Controller("inventory")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -21,7 +27,13 @@ export class InventoryController {
     @CurrentUser() user: JwtPayload | undefined,
     @Query() query: { from?: string; to?: string; productId?: string },
   ) {
-    return this.inventoryService.movements(this.require(user), query);
+    const parsed = inventoryMovementsQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw new AppError("VALIDATION_ERROR", "Data tidak valid", 400, {
+        issues: parsed.error.issues,
+      });
+    }
+    return this.inventoryService.movements(this.require(user), parsed.data);
   }
 
   @Post("adjust")
