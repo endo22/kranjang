@@ -17,6 +17,8 @@ type Billing = {
 
 type CheckoutResult = {
   orderId: string;
+  snapToken: string | null;
+  clientKey: string | null;
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -24,6 +26,24 @@ const PLAN_LABELS: Record<string, string> = {
   business: "Business",
   pro: "Pro",
 };
+
+const allowMockPay = process.env.NODE_ENV !== "production";
+
+declare global {
+  interface Window {
+    snap?: {
+      pay: (
+        token: string,
+        callbacks?: {
+          onSuccess?: () => void;
+          onPending?: () => void;
+          onError?: () => void;
+          onClose?: () => void;
+        },
+      ) => void;
+    };
+  }
+}
 
 function statusLabel(status: string) {
   switch (status) {
@@ -53,8 +73,39 @@ function paymentStatusLabel(status: string) {
   }
 }
 
+function snapScriptUrl() {
+  return process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === "true"
+    ? "https://app.midtrans.com/snap/snap.js"
+    : "https://app.sandbox.midtrans.com/snap/snap.js";
+}
+
+function loadSnapScript(clientKey: string): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+  if (window.snap) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-kranjang-snap]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Gagal memuat Midtrans Snap")));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = snapScriptUrl();
+    script.setAttribute("data-client-key", clientKey);
+    script.setAttribute("data-kranjang-snap", "1");
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Gagal memuat Midtrans Snap"));
+    document.body.appendChild(script);
+  });
+}
+
 export default function SubscriptionPage() {
   const [data, setData] = useState<Billing | null>(null);
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
 
   async function load() {
     setData(await api<Billing>("/billing/current"));
@@ -63,6 +114,49 @@ export default function SubscriptionPage() {
   useEffect(() => {
     void load().catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
   }, []);
+
+  async function activatePlan(planCode: "basic" | "business" | "pro") {
+    setBusyPlan(planCode);
+    try {
+      const result = await api<CheckoutResult>("/billing/checkout", {
+        method: "POST",
+        ...jsonInit({ planCode, billingCycle: "monthly" }),
+      });
+
+      if (result.snapToken && result.clientKey) {
+        await loadSnapScript(result.clientKey);
+        if (!window.snap) {
+          throw new Error("Midtrans Snap belum siap.");
+        }
+        window.snap.pay(result.snapToken, {
+          onSuccess: () => {
+            toast.success(`Pembayaran paket ${PLAN_LABELS[planCode]} berhasil.`);
+            void load();
+          },
+          onPending: () => {
+            toast.message("Pembayaran menunggu konfirmasi Midtrans.");
+            void load();
+          },
+          onError: () => toast.error("Pembayaran Midtrans gagal."),
+          onClose: () => void load(),
+        });
+        return;
+      }
+
+      if (!allowMockPay) {
+        toast.error("Pembayaran Midtrans belum dikonfigurasi.");
+        return;
+      }
+
+      await api("/billing/mock-pay", { method: "POST", ...jsonInit({ orderId: result.orderId }) });
+      toast.success(`Paket ${PLAN_LABELS[planCode]} diaktifkan (mode pengembangan).`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal");
+    } finally {
+      setBusyPlan(null);
+    }
+  }
 
   return (
     <Card>
@@ -83,26 +177,22 @@ export default function SubscriptionPage() {
             {data?.trialEndDate ? new Date(data.trialEndDate).toLocaleDateString("id-ID") : "-"}
           </p>
         </div>
-        <p className="text-sm text-[#616161]">Aktifkan paket (mode pengembangan — pembayaran uji):</p>
+        <p className="text-sm text-[#616161]">
+          {allowMockPay
+            ? "Aktifkan paket (dev: mock-pay bila Snap belum dikonfigurasi):"
+            : "Aktifkan paket melalui Midtrans Snap:"}
+        </p>
         <div className="flex flex-wrap gap-3">
           {(["basic", "business", "pro"] as const).map((planCode) => (
             <Button
               key={planCode}
               variant="outline"
+              disabled={busyPlan !== null}
               onClick={() => {
-                void api<CheckoutResult>("/billing/checkout", {
-                  method: "POST",
-                  ...jsonInit({ planCode, billingCycle: "monthly" }),
-                })
-                  .then(async (result) => {
-                    await api("/billing/mock-pay", { method: "POST", ...jsonInit({ orderId: result.orderId }) });
-                    toast.success(`Paket ${PLAN_LABELS[planCode]} diaktifkan (mode pengembangan).`);
-                    await load();
-                  })
-                  .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+                void activatePlan(planCode);
               }}
             >
-              Aktifkan {PLAN_LABELS[planCode]}
+              {busyPlan === planCode ? "Memproses…" : `Aktifkan ${PLAN_LABELS[planCode]}`}
             </Button>
           ))}
         </div>

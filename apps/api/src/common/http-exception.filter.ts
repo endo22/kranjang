@@ -1,4 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
+import * as Sentry from "@sentry/node";
 import { ApiErrorBody, ErrorCode } from "@kranjang/shared";
 import type { Response } from "express";
 
@@ -110,6 +111,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const payload = exception.getResponse();
 
+      if (status >= 500 && process.env.SENTRY_DSN) {
+        Sentry.captureException(exception);
+      }
+
       response.status(status).json(
         isApiErrorBody(payload)
           ? payload
@@ -120,6 +125,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
             },
       );
       return;
+    }
+
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(exception);
     }
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

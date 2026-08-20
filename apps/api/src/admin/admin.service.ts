@@ -133,11 +133,22 @@ export class AdminService {
 
   async ensureSeedAdmin() {
     const email = process.env.SUPER_ADMIN_EMAIL ?? "admin@kranjang.local";
+    const defaultPassword = "ChangeMeAdmin12";
+    const password = process.env.SUPER_ADMIN_PASSWORD ?? defaultPassword;
+
+    if (process.env.NODE_ENV === "production") {
+      if (!process.env.SUPER_ADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD === defaultPassword) {
+        throw new Error(
+          "SUPER_ADMIN_PASSWORD wajib di-set di production dan tidak boleh memakai default ChangeMeAdmin12.",
+        );
+      }
+    }
+
     const existing = await this.prisma.user.findFirst({ where: { email } });
     if (existing) {
       return existing;
     }
-    const password = process.env.SUPER_ADMIN_PASSWORD ?? "ChangeMeAdmin12";
+
     return this.prisma.user.create({
       data: {
         name: "Super Admin",

@@ -9,6 +9,47 @@ import { PrismaService } from "../prisma/prisma.service.js";
 
 const memoryJobs = new Map<string, number>();
 
+function midtransSnapBaseUrl() {
+  return process.env.MIDTRANS_IS_PRODUCTION === "true"
+    ? "https://app.midtrans.com"
+    : "https://app.sandbox.midtrans.com";
+}
+
+export async function createMidtransSnapToken(input: {
+  orderId: string;
+  amount: number;
+  serverKey: string;
+  fetchImpl?: typeof fetch;
+}): Promise<string> {
+  const fetchFn = input.fetchImpl ?? fetch;
+  const auth = Buffer.from(`${input.serverKey}:`).toString("base64");
+  const response = await fetchFn(`${midtransSnapBaseUrl()}/snap/v1/transactions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      transaction_details: {
+        order_id: input.orderId,
+        gross_amount: Math.round(input.amount),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new AppError("VALIDATION_ERROR", `Gagal membuat token Midtrans Snap.${text ? ` ${text.slice(0, 120)}` : ""}`, 400);
+  }
+
+  const payload = (await response.json()) as { token?: string };
+  if (!payload.token) {
+    throw new AppError("VALIDATION_ERROR", "Respons Midtrans Snap tidak berisi token.", 400);
+  }
+  return payload.token;
+}
+
 @Injectable()
 export class BillingService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -72,22 +113,36 @@ export class BillingService {
       data: { pendingPlanId: plan.id, billingCycle: body.billingCycle === "annual" ? "ANNUAL" : "MONTHLY" },
     });
 
+    const serverKey = process.env.MIDTRANS_SERVER_KEY?.trim();
+    const clientKey = process.env.MIDTRANS_CLIENT_KEY?.trim() || null;
+    let snapToken: string | null = null;
+    if (serverKey) {
+      snapToken = await createMidtransSnapToken({ orderId, amount, serverKey });
+    }
+
     return {
       orderId,
-      snapToken: process.env.MIDTRANS_SERVER_KEY ? `snap-${orderId}` : null,
+      snapToken,
+      clientKey,
       redirectUrl: `${process.env.WEB_URL ?? "http://localhost:3000"}/app/subscription?orderId=${orderId}`,
       amount,
     };
   }
 
   async mockPay(orderId: string) {
-    if (process.env.NODE_ENV === "production" && process.env.ALLOW_MOCK_PAY !== "true") {
+    if (process.env.NODE_ENV === "production") {
       throw new AppError("FORBIDDEN", "Akses ditolak", 403);
     }
     return this.settle(orderId, "SETTLEMENT");
   }
 
-  async webhook(body: { order_id?: string; transaction_status?: string; status_code?: string; gross_amount?: string; signature_key?: string }) {
+  async webhook(body: {
+    order_id?: string;
+    transaction_status?: string;
+    status_code?: string;
+    gross_amount?: string;
+    signature_key?: string;
+  }) {
     const orderId = body.order_id ?? "";
     const serverKey = process.env.MIDTRANS_SERVER_KEY;
     if (serverKey && body.signature_key) {
