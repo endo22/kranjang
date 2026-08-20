@@ -1,7 +1,7 @@
 # PRD Kranjang
 
 **Produk:** Kranjang — SaaS pencatatan usaha dan kasir (POS)  
-**Tagline:** Kasir dan catatan laba untuk warung serta rumah makan  
+**Tagline:** Kasir dan catatan laba untuk toko dan UMKM  
 **Versi:** 1.1  
 **Tanggal:** 18 Agustus 2026  
 **Status:** Phase 1 — disetujui untuk didokumentasikan  
@@ -16,9 +16,9 @@ Lampiran skema: [erd.md](./erd.md)
 
 ## 1. Ringkasan eksekutif
 
-Kranjang adalah aplikasi **SaaS multi-tenant** untuk rumah makan, warung, kedai, toko, dan UMKM. Satu aplikasi dipakai banyak pemilik usaha; setiap tenant hanya melihat dan mengelola datanya sendiri.
+Kranjang adalah aplikasi **SaaS multi-tenant** untuk toko, ritel, dan UMKM. Satu aplikasi dipakai banyak pemilik usaha; setiap tenant hanya melihat dan mengelola datanya sendiri.
 
-Tujuan MVP: pemilik rumah makan dapat **jualan di kasir, stok bahan baku terpotong otomatis dari resep, lalu melihat keuntungan** tanpa spreadsheet.
+Tujuan MVP: pemilik toko dapat **jualan di kasir, stok terpotong otomatis dari penjualan, lalu melihat keuntungan** tanpa spreadsheet.
 
 ### Keputusan yang dikunci
 
@@ -40,12 +40,12 @@ Tujuan MVP: pemilik rumah makan dapat **jualan di kasir, stok bahan baku terpoto
 
 ### Masalah
 
-Pemilik rumah makan sering mencatat penjualan di nota atau chat, stok bahan tidak terhubung ke penjualan, dan keuntungan dihitung kira-kira di akhir bulan.
+Pemilik toko sering mencatat penjualan di nota atau chat, stok barang tidak terhubung ke penjualan, dan keuntungan dihitung kira-kira di akhir bulan.
 
 ### Tujuan produk
 
-1. Mencatat penjualan cepat di kasir (cari menu, barcode, kategori).
-2. Mencatat bahan baku, resep menu, pembelian, dan histori stok.
+1. Mencatat penjualan cepat di kasir (cari produk, barcode, kategori).
+2. Mencatat stok barang, produk, pembelian, dan histori stok.
 3. Menghitung HPP, laba kotor, biaya operasional, dan laba bersih dengan rumus yang sama di dashboard dan laporan.
 4. Memberi dashboard dan laporan yang mudah dipahami pemilik UMKM.
 5. Menjadi bisnis SaaS: trial 30 hari, lalu berlangganan via Midtrans/QRIS.
@@ -64,14 +64,14 @@ Akuntansi lengkap (jurnal, neraca), pemesanan online, meja/dine-in, KDS, aplikas
 | Administrator | Setup master data, user, pengaturan outlet |
 | Manager | Laporan, harga, pantau stok menipis |
 | Cashier | Buka sesi kasir, transaksi, struk |
-| Inventory Staff | Pembelian, adjustment stok, resep |
+| Inventory Staff | Pembelian, adjustment stok, produk |
 | Super Admin Kranjang | Tenant, paket, payment, suspend (Phase 7) |
 
 ---
 
 ## 4. Prinsip MVP
 
-1. Loop rumah makan harus selesai: daftar → bahan & resep → beli stok → jualan → lihat laba.
+1. Loop toko harus selesai: daftar → produk & stok → beli stok → jualan → lihat laba.
 2. Jangan menambah fitur di luar loop itu.
 3. Isolasi tenant berlaku sejak hari pertama.
 4. Setiap angka keuangan punya sumber kolom yang jelas (bagian 11).
@@ -82,7 +82,7 @@ Akuntansi lengkap (jurnal, neraca), pemesanan online, meja/dine-in, KDS, aplikas
 
 ## 5. Ruang lingkup
 
-### 5.1 Masuk MVP operasional rumah makan (Phase 2–5)
+### 5.1 Masuk MVP operasional toko (Phase 2–5)
 
 - Registrasi tenant + user Owner + outlet default + trial 30 hari (data tersimpan; enforcement penuh Phase 6)
 - Login, logout, profil, ganti password
@@ -121,7 +121,7 @@ Akuntansi lengkap (jurnal, neraca), pemesanan online, meja/dine-in, KDS, aplikas
 
 ## 6. Metrik keberhasilan MVP
 
-1. Owner menyelesaikan transaksi kasir pertama dalam kurang dari 10 menit setelah menu/resep terisi.
+1. Owner menyelesaikan transaksi kasir pertama dalam kurang dari 10 menit setelah produk terisi.
 2. Penjualan RECIPE qty N memotong semua bahan sesuai BOM × N, masing-masing ada `stock_movement`.
 3. Dashboard dan P&L menampilkan Revenue, HPP, Gross Profit, Expense, Net Profit dari rumus yang sama.
 4. Tenant A tidak bisa membaca data Tenant B di semua endpoint.
@@ -136,10 +136,10 @@ Akuntansi lengkap (jurnal, neraca), pemesanan online, meja/dine-in, KDS, aplikas
 ```mermaid
 flowchart TD
   daftar[Daftar usaha] --> trial[Trial 30 hari]
-  trial --> setup[Kategori bahan menu resep]
-  setup --> beli[Beli bahan]
+  trial --> setup[Kategori produk stok]
+  setup --> beli[Beli stok]
   beli --> kasir[Jual di kasir]
-  kasir --> stok[Stok bahan terpotong]
+  kasir --> stok[Stok terpotong]
   stok --> laba[Lihat laba]
   trial --> habis{Trial habis?}
   habis -->|Belum| kasir
@@ -152,7 +152,7 @@ flowchart TD
 1. User mengisi nama usaha, nama pemilik, email, password, nomor HP.
 2. Sistem membuat Tenant, User Owner, Role Owner, Outlet default, `trial_start_date` = sekarang, `trial_end_date` = +30 hari, `subscription_status` = `TRIAL`.
 3. Email verifikasi dikirim.
-4. Onboarding: kategori → bahan → menu → resep.
+4. Onboarding: kategori → produk → stok.
 
 ### 7.3 POS
 
@@ -502,7 +502,7 @@ Register request:
 
 ```json
 {
-  "businessName": "Warung Nasi Goreng Pak Budi",
+  "businessName": "Toko Budi",
   "ownerName": "Budi",
   "email": "budi@example.com",
   "password": "********",
@@ -515,7 +515,7 @@ Login response (bentuk):
 ```json
 {
   "user": { "id": "...", "name": "Budi", "role": "OWNER" },
-  "tenant": { "id": "...", "name": "Warung Nasi Goreng Pak Budi", "subscriptionStatus": "TRIAL" }
+  "tenant": { "id": "...", "name": "Toko Budi", "subscriptionStatus": "TRIAL" }
 }
 ```
 
@@ -627,6 +627,9 @@ Setiap phase menghasilkan perangkat lunak yang bisa ditest, **hanya untuk scope 
 | 6 | Trial enforcement, Midtrans, QRIS, webhook | Expired read-only; bayar → ACTIVE |
 | 7 | Super Admin | Suspend tenant, CRUD paket |
 | 8 | Hardening, tes beban, Vercel+Railway, backup | Checklist security + deploy |
+| 9 | Power Pack — perkuat modul existing (1 kuartal) | [kranjang-prd-phase-9-power.md](./kranjang-prd-phase-9-power.md); DoD di dokumen itu §17 |
+
+Phase 9 memperdalam fitur yang sudah ada; **tidak** membuka scope §5.3. Detail: [kranjang-prd-phase-9-power.md](./kranjang-prd-phase-9-power.md).
 
 Kode aplikasi **belum** ditulis sampai Phase 2 diminta.
 
