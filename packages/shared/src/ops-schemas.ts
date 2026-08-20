@@ -24,6 +24,7 @@ export const productSchema = z.object({
   buyPrice: z.number().min(0),
   sellPrice: z.number().min(0),
   minStock: z.number().min(0).optional(),
+  targetMargin: z.number().min(0).max(100).optional().nullable(),
   isActive: z.boolean().optional(),
   imageUrl: z.string().url().max(255).optional().nullable(),
 });

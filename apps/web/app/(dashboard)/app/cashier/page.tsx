@@ -10,11 +10,18 @@ import { api, jsonInit, type SettingsRecord } from "@/lib/api";
 import { formatRp } from "@/lib/format";
 import {
   addCartItem,
+  adjustLastCartQty,
+  clearHeldCarts,
   estimateSaleTotals,
   filterProducts,
+  holdActiveCart,
+  loadHeldCarts,
   pickProductForEnter,
+  resolveCashierShortcut,
+  saveHeldCarts,
   type CashierCartItem,
   type CashierProduct,
+  type HeldCart,
 } from "./cashier-utils";
 
 type Product = CashierProduct;
@@ -70,7 +77,9 @@ export default function CashierPage() {
   const [closingCash, setClosingCash] = useState("0");
   const [discount, setDiscount] = useState("0");
   const [lastSummary, setLastSummary] = useState<CashierCloseSummary | null>(null);
+  const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const prevSessionIdRef = useRef<string | null>(null);
 
   async function load() {
     const [nextProducts, nextCategories, nextSettings, current, nextCustomers] = await Promise.all([
@@ -91,6 +100,26 @@ export default function CashierPage() {
     void load().catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat kasir."));
   }, []);
 
+  useEffect(() => {
+    const previousId = prevSessionIdRef.current;
+    const nextId = session?.id ?? null;
+    if (previousId && previousId !== nextId) {
+      clearHeldCarts(previousId);
+    }
+    if (nextId) {
+      setHeldCarts(loadHeldCarts(nextId));
+    } else {
+      setHeldCarts([]);
+    }
+    prevSessionIdRef.current = nextId;
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (session?.id) {
+      saveHeldCarts(session.id, heldCarts);
+    }
+  }, [heldCarts, session?.id]);
+
   const filtered = useMemo(() => filterProducts(products, query, categoryFilter), [products, query, categoryFilter]);
   const totals = useMemo(
     () =>
@@ -106,6 +135,119 @@ export default function CashierPage() {
     setQuery("");
     searchInputRef.current?.focus();
   }
+
+  function clearActiveCart() {
+    setCart([]);
+    setDiscount("0");
+    setCustomerId("");
+  }
+
+  function handleHoldCart() {
+    if (!session) {
+      toast.error("Buka sesi kasir dulu.");
+      return;
+    }
+    const result = holdActiveCart(heldCarts, { items: cart, discount, customerId });
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    setHeldCarts(result.holds);
+    clearActiveCart();
+    toast.success("Keranjang ditahan.");
+  }
+
+  function handleRestoreCart(holdId?: string) {
+    if (!session || heldCarts.length === 0) {
+      toast.error("Tidak ada keranjang ditahan.");
+      return;
+    }
+
+    let nextHolds = heldCarts;
+    if (cart.length > 0) {
+      const parked = holdActiveCart(heldCarts, { items: cart, discount, customerId });
+      if (parked.error) {
+        toast.error(parked.error);
+        return;
+      }
+      nextHolds = parked.holds;
+    }
+
+    const target = holdId ? nextHolds.find((row) => row.id === holdId) : nextHolds[0];
+    if (!target) {
+      toast.error("Slot tahan tidak ditemukan.");
+      return;
+    }
+
+    setHeldCarts(nextHolds.filter((row) => row.id !== target.id));
+    setCart(target.items);
+    setDiscount(target.discount);
+    setCustomerId(target.customerId);
+    toast.success(`Mengambil ${target.label}.`);
+  }
+
+  function handlePay() {
+    if (!session || cart.length === 0) {
+      return;
+    }
+    const discountAmount = Math.max(0, Number(discount) || 0);
+    void api<SaleResponse>("/sales", {
+      method: "POST",
+      ...jsonInit({
+        paymentMethod: method,
+        discountAmount,
+        customerId: customerId || undefined,
+        items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
+      }),
+    })
+      .then((sale) => {
+        openReceiptPreview(sale);
+        toast.success("Transaksi tersimpan.");
+        clearActiveCart();
+        setQuery("");
+        void load();
+      })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const action = resolveCashierShortcut({
+        key: event.key,
+        targetTagName: event.target instanceof HTMLElement ? event.target.tagName : undefined,
+      });
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      if (action === "focusSearch") {
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (action === "pay") {
+        handlePay();
+        return;
+      }
+      if (action === "hold") {
+        handleHoldCart();
+        return;
+      }
+      if (action === "restore") {
+        handleRestoreCart();
+        return;
+      }
+      if (action === "qtyUp") {
+        setCart((current) => adjustLastCartQty(current, 1));
+        return;
+      }
+      if (action === "qtyDown") {
+        setCart((current) => adjustLastCartQty(current, -1));
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   function openReceiptPreview(sale: SaleResponse) {
     if (typeof window === "undefined") {
@@ -134,19 +276,17 @@ export default function CashierPage() {
     <meta charset="utf-8" />
     <title>Struk ${escapeHtml(sale.receiptNo)}</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 24px; color: #111827; }
-      h1, p { margin: 0; }
-      .muted { color: #6b7280; font-size: 12px; }
+      body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; padding: 16px; color: #1a1a1a; }
+      .muted { color: #616161; font-size: 12px; }
       .section { margin-top: 16px; }
-      table { width: 100%; border-collapse: collapse; font-size: 14px; }
-      td { padding: 6px 0; border-bottom: 1px dashed #d1d5db; vertical-align: top; }
-      .summary-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 14px; }
-      .summary-row.total { font-weight: 700; font-size: 16px; }
-      @media print { body { margin: 0; padding: 12px; } }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      td { padding: 4px 0; vertical-align: top; }
+      .summary-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; }
+      .total { font-weight: 700; font-size: 15px; margin-top: 10px; }
     </style>
   </head>
   <body>
-    <h1>${escapeHtml(settings?.name ?? "Kranjang")}</h1>
+    <h1 style="font-size:18px;margin:0;">Kranjang</h1>
     <p class="muted">${escapeHtml(sale.receiptNo)} • ${escapeHtml(new Date(sale.soldAt).toLocaleString("id-ID"))}</p>
     <div class="section">
       <table>
@@ -228,7 +368,10 @@ export default function CashierPage() {
                     ...jsonInit({ closingCash: Number(closingCash) || 0 }),
                   })
                     .then((result) => {
+                      clearHeldCarts(session.id);
+                      setHeldCarts([]);
                       setLastSummary(result.summary);
+                      clearActiveCart();
                       return load();
                     })
                     .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
@@ -327,6 +470,32 @@ export default function CashierPage() {
               <span>{formatRp(item.product.sellPrice * item.quantity)}</span>
             </div>
           ))}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={!session || cart.length === 0} onClick={handleHoldCart}>
+              Tahan (F8)
+            </Button>
+            <Button type="button" variant="outline" disabled={!session || heldCarts.length === 0} onClick={() => handleRestoreCart()}>
+              Ambil (F9)
+            </Button>
+          </div>
+          {heldCarts.length > 0 ? (
+            <div className="space-y-2 rounded-2xl border border-[#e5e7eb] p-3 text-sm">
+              <p className="font-medium">Ditahan ({heldCarts.length}/3)</p>
+              {heldCarts.map((hold) => (
+                <button
+                  key={hold.id}
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left hover:bg-[#eeece7]"
+                  onClick={() => handleRestoreCart(hold.id)}
+                >
+                  <span>
+                    {hold.label} · {hold.items.length} item
+                  </span>
+                  <span className="text-xs text-[#616161]">{new Date(hold.savedAt).toLocaleTimeString("id-ID")}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="space-y-2">
             <p className="text-sm font-medium">Diskon transaksi</p>
             <Input type="number" min={0} value={discount} onChange={(event) => setDiscount(event.target.value)} />
@@ -367,34 +536,10 @@ export default function CashierPage() {
             <option>EWALLET</option>
             <option>CARD</option>
           </select>
-          <Button
-            className="w-full"
-            disabled={!session || cart.length === 0}
-            onClick={() => {
-              const discountAmount = Math.max(0, Number(discount) || 0);
-              void api<SaleResponse>("/sales", {
-                method: "POST",
-                ...jsonInit({
-                  paymentMethod: method,
-                  discountAmount,
-                  customerId: customerId || undefined,
-                  items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
-                }),
-              })
-                .then((sale) => {
-                  openReceiptPreview(sale);
-                  toast.success("Transaksi tersimpan.");
-                  setCart([]);
-                  setDiscount("0");
-                  setCustomerId("");
-                  setQuery("");
-                  void load();
-                })
-                .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
-            }}
-          >
-            Bayar
+          <Button className="w-full" disabled={!session || cart.length === 0} onClick={handlePay}>
+            Bayar (F4)
           </Button>
+          <p className="text-xs text-[#616161]">Shortcut: F2 cari · F4 bayar · F8 tahan · F9 ambil · +/- qty item terakhir</p>
         </CardContent>
       </Card>
     </div>

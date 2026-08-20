@@ -51,10 +51,23 @@ export class ReportsService {
     const paidPurchases = purchases.filter((row) => row.paymentStatus === "PAID");
     const cashOut = roundMoney(expenseTotal + paidPurchases.reduce((sum, row) => sum + asNumber(row.totalAmount), 0));
 
-    const productMap = new Map<string, { name: string; qty: number; revenue: number; cogs: number }>();
+    const productMap = new Map<string, { name: string; qty: number; revenue: number; cogs: number; targetMargin: number | null }>();
+    const targetByProduct = new Map(
+      products.map((product) => [
+        product.id,
+        product.targetMargin === null || product.targetMargin === undefined ? null : asNumber(product.targetMargin),
+      ]),
+    );
     for (const sale of sales) {
       for (const item of sale.items) {
-        const current = productMap.get(item.productId) ?? { name: item.productNameSnapshot, qty: 0, revenue: 0, cogs: 0 };
+        const current =
+          productMap.get(item.productId) ?? {
+            name: item.productNameSnapshot,
+            qty: 0,
+            revenue: 0,
+            cogs: 0,
+            targetMargin: targetByProduct.get(item.productId) ?? null,
+          };
         current.qty += asNumber(item.quantity);
         current.revenue += asNumber(item.lineTotal);
         current.cogs += asNumber(item.cogsAmount);
@@ -117,11 +130,16 @@ export class ReportsService {
           createdAt: row.createdAt.toISOString(),
         })),
       },
-      productProfitability: [...productMap.values()].map((row) => ({
-        ...row,
-        profit: roundMoney(row.revenue - row.cogs),
-        margin: row.revenue === 0 ? 0 : roundMoney(((row.revenue - row.cogs) / row.revenue) * 100),
-      })),
+      productProfitability: [...productMap.values()].map((row) => {
+        const margin = row.revenue === 0 ? 0 : roundMoney(((row.revenue - row.cogs) / row.revenue) * 100);
+        const vsTarget = row.targetMargin === null ? null : roundMoney(margin - row.targetMargin);
+        return {
+          ...row,
+          profit: roundMoney(row.revenue - row.cogs),
+          margin,
+          vsTarget,
+        };
+      }),
     };
   }
 
@@ -173,7 +191,7 @@ export class ReportsService {
         ];
       case "product-profitability":
         return [
-          ["Produk", "Qty", "Omzet", "HPP", "Laba", "Margin"],
+          ["Produk", "Qty", "Omzet", "HPP", "Laba", "Margin", "Target", "VsTarget"],
           ...data.productProfitability.map((row) => [
             row.name,
             String(row.qty),
@@ -181,6 +199,8 @@ export class ReportsService {
             String(row.cogs),
             String(row.profit),
             String(row.margin),
+            row.targetMargin === null ? "" : String(row.targetMargin),
+            row.vsTarget === null ? "" : String(row.vsTarget),
           ]),
         ];
       case "cash-flow":

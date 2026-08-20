@@ -267,6 +267,7 @@ model Product {
   avgCost      Decimal   @default(0) @map("avg_cost") @db.Decimal(19, 4)
   stock        Decimal   @default(0) @db.Decimal(18, 4)
   minStock     Decimal   @default(0) @map("min_stock") @db.Decimal(18, 4)
+  targetMargin Decimal?  @map("target_margin") @db.Decimal(5, 2)
   isActive     Boolean   @default(true) @map("is_active")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz

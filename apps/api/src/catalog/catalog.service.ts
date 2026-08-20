@@ -158,6 +158,7 @@ export class CatalogService {
             sellPrice: body.sellPrice,
             avgCost: body.productType === "RECIPE" ? 0 : body.buyPrice,
             minStock: body.minStock ?? 0,
+            targetMargin: body.targetMargin ?? null,
             isActive: body.isActive ?? true,
           },
         });
@@ -210,6 +211,12 @@ export class CatalogService {
           buyPrice: "buyPrice" in body ? body.buyPrice : asNumber(currentProduct.buyPrice),
           sellPrice: "sellPrice" in body ? body.sellPrice : asNumber(currentProduct.sellPrice),
           minStock: "minStock" in body ? (body.minStock ?? 0) : asNumber(currentProduct.minStock),
+          targetMargin:
+            "targetMargin" in body
+              ? (body.targetMargin ?? null)
+              : currentProduct.targetMargin === null
+                ? null
+                : asNumber(currentProduct.targetMargin),
           isActive: "isActive" in body ? (body.isActive ?? true) : currentProduct.isActive,
         },
       });
@@ -331,6 +338,7 @@ export class CatalogService {
     avgCost: unknown;
     stock: unknown;
     minStock: unknown;
+    targetMargin: unknown | null;
     isActive: boolean;
     category: { id: string; name: string } | null;
     images: Array<{ storagePath: string }>;
@@ -354,6 +362,7 @@ export class CatalogService {
       avgCost: asNumber(product.avgCost),
       stock: roundQty(asNumber(product.stock)),
       minStock: asNumber(product.minStock),
+      targetMargin: product.targetMargin === null || product.targetMargin === undefined ? null : asNumber(product.targetMargin),
       isActive: product.isActive,
       hpp,
       category: product.category,

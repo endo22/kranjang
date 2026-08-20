@@ -396,6 +396,8 @@ Tiap area: persona, perilaku, acceptance, dampak teknis, out-of-scope lokal.
 - Retur pembelian sebagian
 - Partial receive PO
 
+**Wave 1 (eksekusi):** [docs/superpowers/plans/2026-08-20-kranjang-next-wave-1.md](../superpowers/plans/2026-08-20-kranjang-next-wave-1.md) — shortcut + hold cart + target margin.
+
 ### Later / tetap di luar (PRD v1.1 §5.3)
 
 - Multi-outlet UI + transfer stok
@@ -519,6 +521,7 @@ Overflow masuk lampiran **Next**, bukan diam-diam menambah §5.3.
 - [x] Implementation plan Blok A: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-a.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-a.md)
 - [x] Implementation plan Blok B: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-b.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-b.md)
 - [x] Implementation plan Blok C: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-c.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-c.md)
+- [x] Next Wave 1 plan: [docs/superpowers/plans/2026-08-20-kranjang-next-wave-1.md](../superpowers/plans/2026-08-20-kranjang-next-wave-1.md)
 - [x] Update pointer roadmap di [kranjang-prd.md](./kranjang-prd.md) §18.
 
 ---

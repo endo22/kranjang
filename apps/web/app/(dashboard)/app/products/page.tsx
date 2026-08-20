@@ -319,6 +319,16 @@ export default function ProductsPage() {
             <Input value={form.barcode} onChange={(event) => setFormField("barcode", event.target.value)} />
             <Label>Minimum stok</Label>
             <Input type="number" min={0} value={form.minStock} onChange={(event) => setFormField("minStock", event.target.value)} />
+            <Label>Target margin (%)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={form.targetMargin}
+              onChange={(event) => setFormField("targetMargin", event.target.value)}
+              placeholder="Opsional"
+            />
             <Label>URL gambar</Label>
             <Input type="url" value={form.imageUrl} onChange={(event) => setFormField("imageUrl", event.target.value)} placeholder="https://..." />
             <label className="flex items-center gap-2 text-sm font-medium">
