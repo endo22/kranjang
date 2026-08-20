@@ -3,3 +3,4 @@ export * from "./permissions.ts";
 export * from "./plans.ts";
 export * from "./auth-schemas.ts";
 export * from "./user-schemas.ts";
+export * from "./ops-schemas.ts";

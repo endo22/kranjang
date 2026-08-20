@@ -99,6 +99,103 @@ describe("phase 9 block A", () => {
     await app.close();
   }, 60000);
 
+  it("rejects WASTE without notes and filters movements", async () => {
+    const app = await createApp();
+    const email = uniqueEmail();
+    const created = await register(app, { email, businessName: `Warung ${email.slice(0, 8)}` });
+    expect(created.status).toBe(201);
+    const auth = { Authorization: `Bearer ${created.body.accessToken}` };
+    const server = request(app.getHttpServer());
+
+    const kopi = await server.post("/api/v1/products").set(auth).send({
+      name: "Kopi Bubuk",
+      productType: "INGREDIENT",
+      unit: "gram",
+      buyPrice: 1000,
+      sellPrice: 2000,
+      minStock: 5,
+    });
+    expect(kopi.status).toBe(201);
+
+    const teh = await server.post("/api/v1/products").set(auth).send({
+      name: "Teh Celup",
+      productType: "INGREDIENT",
+      unit: "pcs",
+      buyPrice: 500,
+      sellPrice: 1500,
+      minStock: 5,
+    });
+    expect(teh.status).toBe(201);
+
+    const seeded = await server.post("/api/v1/inventory/adjust").set(auth).send({
+      productId: kopi.body.id,
+      quantity: 10,
+      movementType: "INITIAL_STOCK",
+      notes: "stok awal",
+    });
+    expect(seeded.status).toBe(201);
+
+    const rejectedWaste = await server.post("/api/v1/inventory/adjust").set(auth).send({
+      productId: kopi.body.id,
+      quantity: -2,
+      movementType: "WASTE",
+    });
+    expect(rejectedWaste.status).toBe(400);
+    expect(rejectedWaste.body.code).toBe("VALIDATION_ERROR");
+    expect(rejectedWaste.body.details.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "Catatan wajib untuk waste.",
+          path: ["notes"],
+        }),
+      ]),
+    );
+
+    const wasted = await server.post("/api/v1/inventory/adjust").set(auth).send({
+      productId: kopi.body.id,
+      quantity: -2,
+      movementType: "WASTE",
+      notes: "produk rusak",
+    });
+    expect(wasted.status).toBe(201);
+
+    const otherSeeded = await server.post("/api/v1/inventory/adjust").set(auth).send({
+      productId: teh.body.id,
+      quantity: 7,
+      movementType: "INITIAL_STOCK",
+      notes: "stok teh",
+    });
+    expect(otherSeeded.status).toBe(201);
+
+    const past = encodeURIComponent(new Date(Date.now() - 60_000).toISOString());
+    const future = encodeURIComponent(new Date(Date.now() + 60_000).toISOString());
+    const filtered = await server
+      .get(`/api/v1/inventory/movements?productId=${kopi.body.id}&from=${past}&to=${future}`)
+      .set(auth);
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: kopi.body.id,
+          movementType: "WASTE",
+          notes: "produk rusak",
+        }),
+      ]),
+    );
+    expect(filtered.body.every((row: { productId: string }) => row.productId === kopi.body.id)).toBe(true);
+
+    const futureOnly = await server.get(`/api/v1/inventory/movements?from=${future}`).set(auth);
+    expect(futureOnly.status).toBe(200);
+    expect(futureOnly.body).toEqual([]);
+
+    const pastOnly = await server.get(`/api/v1/inventory/movements?to=${past}`).set(auth);
+    expect(pastOnly.status).toBe(200);
+    expect(pastOnly.body).toEqual([]);
+
+    await app.close();
+  }, 60000);
+
   it("closes cashier session with cash difference summary", async () => {
     const app = await createApp();
     const email = uniqueEmail();

@@ -73,12 +73,22 @@ export const purchaseSchema = z.object({
     .min(1),
 });
 
-export const inventoryAdjustSchema = z.object({
-  productId: z.string().uuid(),
-  quantity: z.number(),
-  movementType: z.enum(["ADJUSTMENT", "WASTE", "INITIAL_STOCK"]),
-  notes: optionalText,
-});
+export const inventoryAdjustSchema = z
+  .object({
+    productId: z.string().uuid(),
+    quantity: z.number(),
+    movementType: z.enum(["ADJUSTMENT", "WASTE", "INITIAL_STOCK"]),
+    notes: optionalText,
+  })
+  .superRefine((value, ctx) => {
+    if (value.movementType === "WASTE" && !value.notes) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Catatan wajib untuk waste.",
+        path: ["notes"],
+      });
+    }
+  });
 
 export const cashierOpenSchema = z.object({
   openingCash: z.number().min(0).optional(),

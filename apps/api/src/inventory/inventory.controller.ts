@@ -1,0 +1,39 @@
+import { Body, Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/common";
+import { inventoryAdjustSchema } from "@kranjang/shared";
+import type { z } from "zod";
+import type { JwtPayload } from "../auth/tokens.js";
+import { AppError } from "../common/app-error.js";
+import { CurrentUser } from "../common/current-user.js";
+import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
+import { PermissionsGuard } from "../common/permissions.guard.js";
+import { RequirePermissions } from "../common/require-permissions.js";
+import { ZodPipe } from "../common/zod.pipe.js";
+import { InventoryService } from "./inventory.service.js";
+
+@Controller("inventory")
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+export class InventoryController {
+  constructor(@Inject(InventoryService) private readonly inventoryService: InventoryService) {}
+
+  @Get("movements")
+  @RequirePermissions("inventory.view")
+  movements(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Query() query: { from?: string; to?: string; productId?: string },
+  ) {
+    return this.inventoryService.movements(this.require(user), query);
+  }
+
+  @Post("adjust")
+  @RequirePermissions("inventory.adjust")
+  adjust(@CurrentUser() user: JwtPayload | undefined, @Body(new ZodPipe(inventoryAdjustSchema)) body: z.infer<typeof inventoryAdjustSchema>) {
+    return this.inventoryService.adjust(this.require(user), body);
+  }
+
+  private require(user: JwtPayload | undefined): JwtPayload {
+    if (!user) {
+      throw new AppError("UNAUTHORIZED", "Akses tidak sah", 401);
+    }
+    return user;
+  }
+}
