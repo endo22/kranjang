@@ -12,6 +12,12 @@ import { UsersModule } from "./users/users.module.js";
 import { CatalogModule } from "./catalog/catalog.module.js";
 import { InventoryModule } from "./inventory/inventory.module.js";
 import { SalesModule } from "./sales/sales.module.js";
+import { PartnersModule } from "./partners/partners.module.js";
+import { PurchasesModule } from "./purchases/purchases.module.js";
+import { ExpensesModule } from "./expenses/expenses.module.js";
+import { ReportsModule } from "./reports/reports.module.js";
+import { BillingModule } from "./billing/billing.module.js";
+import { AdminModule } from "./admin/admin.module.js";
 
 @Module({
   imports: [
@@ -24,6 +30,12 @@ import { SalesModule } from "./sales/sales.module.js";
     CatalogModule,
     InventoryModule,
     SalesModule,
+    PartnersModule,
+    PurchasesModule,
+    ExpensesModule,
+    ReportsModule,
+    BillingModule,
+    AdminModule,
   ],
   providers: [
     {
