@@ -154,7 +154,7 @@ export class CatalogService {
     const currentProduct = await this.getProductRecord(currentUser, id);
 
     await this.prisma.product.update({
-      where: { id, tenantId: currentUser.tid, deletedAt: null },
+      where: { id },
       data: {
         name: "name" in body ? body.name : currentProduct.name,
         productType: "productType" in body ? body.productType : currentProduct.productType,
