@@ -12,6 +12,31 @@ type ProductBody = z.infer<typeof productSchema>;
 type PatchProductBody = z.infer<typeof patchProductSchema>;
 type RecipeBody = z.infer<typeof recipeSchema>;
 
+function isPrismaUniqueError(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
+}
+
+function getPrismaUniqueTargets(error: unknown): string[] {
+  if (!error || typeof error !== "object" || !("meta" in error) || !error.meta || typeof error.meta !== "object") {
+    return [];
+  }
+
+  const target = "target" in error.meta ? error.meta.target : undefined;
+  if (Array.isArray(target)) {
+    return target.filter((value): value is string => typeof value === "string");
+  }
+
+  if (typeof target === "string") {
+    return [target];
+  }
+
+  return [];
+}
+
+function hasUniqueTarget(error: unknown, field: string): boolean {
+  return getPrismaUniqueTargets(error).includes(field);
+}
+
 @Injectable()
 export class CatalogService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -103,49 +128,55 @@ export class CatalogService {
     const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
     assertWritableSubscription(tenant.subscriptionStatus);
 
-    const product = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.product.create({
-        data: {
-          tenantId: currentUser.tid,
-          outletId: outlet.id,
-          name: body.name,
-          productType: body.productType,
-          unit: body.unit,
-          categoryId: body.categoryId,
-          supplierId: body.supplierId,
-          sku: body.sku,
-          barcode: body.barcode,
-          buyPrice: body.buyPrice,
-          sellPrice: body.sellPrice,
-          avgCost: body.productType === "RECIPE" ? 0 : body.buyPrice,
-          minStock: body.minStock ?? 0,
-          isActive: body.isActive ?? true,
-        },
-      });
-
-      if (body.imageUrl) {
-        await tx.productImage.create({
+    let productId = "";
+    try {
+      const product = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.product.create({
           data: {
             tenantId: currentUser.tid,
-            productId: created.id,
-            storagePath: body.imageUrl,
+            outletId: outlet.id,
+            name: body.name,
+            productType: body.productType,
+            unit: body.unit,
+            categoryId: body.categoryId,
+            supplierId: body.supplierId,
+            sku: body.sku,
+            barcode: body.barcode,
+            buyPrice: body.buyPrice,
+            sellPrice: body.sellPrice,
+            avgCost: body.productType === "RECIPE" ? 0 : body.buyPrice,
+            minStock: body.minStock ?? 0,
+            isActive: body.isActive ?? true,
           },
         });
-      }
 
-      await writeAudit(tx, {
-        tenantId: currentUser.tid,
-        userId: currentUser.sub,
-        action: "CREATE",
-        module: "product",
-        entity: "product",
-        entityId: created.id,
+        if (body.imageUrl) {
+          await tx.productImage.create({
+            data: {
+              tenantId: currentUser.tid,
+              productId: created.id,
+              storagePath: body.imageUrl,
+            },
+          });
+        }
+
+        await writeAudit(tx, {
+          tenantId: currentUser.tid,
+          userId: currentUser.sub,
+          action: "CREATE",
+          module: "product",
+          entity: "product",
+          entityId: created.id,
+        });
+
+        return created;
       });
+      productId = product.id;
+    } catch (error) {
+      this.rethrowProductConflict(error);
+    }
 
-      return created;
-    });
-
-    return this.getProduct(currentUser, product.id);
+    return this.getProduct(currentUser, productId);
   }
 
   async updateProduct(currentUser: JwtPayload, id: string, body: PatchProductBody) {
@@ -153,30 +184,34 @@ export class CatalogService {
     assertWritableSubscription(tenant.subscriptionStatus);
     const currentProduct = await this.getProductRecord(currentUser, id);
 
-    await this.prisma.product.update({
-      where: { id },
-      data: {
-        name: "name" in body ? body.name : currentProduct.name,
-        productType: "productType" in body ? body.productType : currentProduct.productType,
-        unit: "unit" in body ? body.unit : currentProduct.unit,
-        categoryId: "categoryId" in body ? body.categoryId : currentProduct.categoryId,
-        supplierId: "supplierId" in body ? body.supplierId : currentProduct.supplierId,
-        sku: "sku" in body ? body.sku : currentProduct.sku,
-        barcode: "barcode" in body ? body.barcode : currentProduct.barcode,
-        buyPrice: "buyPrice" in body ? body.buyPrice : asNumber(currentProduct.buyPrice),
-        sellPrice: "sellPrice" in body ? body.sellPrice : asNumber(currentProduct.sellPrice),
-        minStock: "minStock" in body ? (body.minStock ?? 0) : asNumber(currentProduct.minStock),
-        isActive: "isActive" in body ? (body.isActive ?? true) : currentProduct.isActive,
-      },
-    });
+    try {
+      await this.prisma.product.update({
+        where: { id },
+        data: {
+          name: "name" in body ? body.name : currentProduct.name,
+          productType: "productType" in body ? body.productType : currentProduct.productType,
+          unit: "unit" in body ? body.unit : currentProduct.unit,
+          categoryId: "categoryId" in body ? body.categoryId : currentProduct.categoryId,
+          supplierId: "supplierId" in body ? body.supplierId : currentProduct.supplierId,
+          sku: "sku" in body ? body.sku : currentProduct.sku,
+          barcode: "barcode" in body ? body.barcode : currentProduct.barcode,
+          buyPrice: "buyPrice" in body ? body.buyPrice : asNumber(currentProduct.buyPrice),
+          sellPrice: "sellPrice" in body ? body.sellPrice : asNumber(currentProduct.sellPrice),
+          minStock: "minStock" in body ? (body.minStock ?? 0) : asNumber(currentProduct.minStock),
+          isActive: "isActive" in body ? (body.isActive ?? true) : currentProduct.isActive,
+        },
+      });
 
-    if ("imageUrl" in body) {
-      await this.prisma.productImage.deleteMany({ where: { productId: id, tenantId: currentUser.tid } });
-      if (body.imageUrl) {
-        await this.prisma.productImage.create({
-          data: { tenantId: currentUser.tid, productId: id, storagePath: body.imageUrl },
-        });
+      if ("imageUrl" in body) {
+        await this.prisma.productImage.deleteMany({ where: { productId: id, tenantId: currentUser.tid } });
+        if (body.imageUrl) {
+          await this.prisma.productImage.create({
+            data: { tenantId: currentUser.tid, productId: id, storagePath: body.imageUrl },
+          });
+        }
       }
+    } catch (error) {
+      this.rethrowProductConflict(error);
     }
 
     return this.getProduct(currentUser, id);
@@ -261,6 +296,14 @@ export class CatalogService {
       throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
     }
     return product;
+  }
+
+  private rethrowProductConflict(error: unknown): never {
+    if (isPrismaUniqueError(error) && hasUniqueTarget(error, "barcode")) {
+      throw new AppError("VALIDATION_ERROR", "Barcode sudah dipakai produk lain.", 400);
+    }
+
+    throw error;
   }
 
   private toProduct(product: {

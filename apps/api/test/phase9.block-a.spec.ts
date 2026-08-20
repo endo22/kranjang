@@ -99,6 +99,56 @@ describe("phase 9 block A", () => {
     await app.close();
   }, 60000);
 
+  it("maps duplicate barcode to validation error with clear message", async () => {
+    const app = await createApp();
+    const email = uniqueEmail();
+    const created = await register(app, { email, businessName: `Warung ${email.slice(0, 8)}` });
+    expect(created.status).toBe(201);
+    const auth = { Authorization: `Bearer ${created.body.accessToken}` };
+    const server = request(app.getHttpServer());
+
+    const first = await server.post("/api/v1/products").set(auth).send({
+      name: "Teh Botol",
+      productType: "SIMPLE",
+      unit: "botol",
+      buyPrice: 3000,
+      sellPrice: 6000,
+      barcode: "DUPL-001",
+    });
+    expect(first.status).toBe(201);
+
+    const duplicateCreate = await server.post("/api/v1/products").set(auth).send({
+      name: "Teh Kotak",
+      productType: "SIMPLE",
+      unit: "kotak",
+      buyPrice: 2500,
+      sellPrice: 5500,
+      barcode: "DUPL-001",
+    });
+    expect(duplicateCreate.status).toBe(400);
+    expect(duplicateCreate.body.code).toBe("VALIDATION_ERROR");
+    expect(duplicateCreate.body.message).toBe("Barcode sudah dipakai produk lain.");
+
+    const second = await server.post("/api/v1/products").set(auth).send({
+      name: "Jus Jeruk",
+      productType: "SIMPLE",
+      unit: "gelas",
+      buyPrice: 4000,
+      sellPrice: 9000,
+      barcode: "DUPL-002",
+    });
+    expect(second.status).toBe(201);
+
+    const duplicateUpdate = await server.patch(`/api/v1/products/${second.body.id}`).set(auth).send({
+      barcode: "DUPL-001",
+    });
+    expect(duplicateUpdate.status).toBe(400);
+    expect(duplicateUpdate.body.code).toBe("VALIDATION_ERROR");
+    expect(duplicateUpdate.body.message).toBe("Barcode sudah dipakai produk lain.");
+
+    await app.close();
+  }, 60000);
+
   it("rejects WASTE without notes and filters movements", async () => {
     const app = await createApp();
     const email = uniqueEmail();

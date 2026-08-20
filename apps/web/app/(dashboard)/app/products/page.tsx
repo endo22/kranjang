@@ -25,26 +25,49 @@ type Product = ProductDetail & {
 };
 
 type Category = { id: string; name: string; sortOrder?: number };
+type ProductFilters = { q: string; productType: string; categoryId: string };
 
 function createEmptyRecipeDraft(): RecipeDraftItem {
   return { ingredientId: "", quantity: "1" };
 }
 
+function buildProductsPath(filters: ProductFilters) {
+  const params = new URLSearchParams();
+  const q = filters.q.trim();
+  if (q) {
+    params.set("q", q);
+  }
+  if (filters.productType) {
+    params.set("productType", filters.productType);
+  }
+  if (filters.categoryId) {
+    params.set("categoryId", filters.categoryId);
+  }
+
+  const query = params.toString();
+  return query ? `/products?${query}` : "/products";
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [visibleProducts, setVisibleProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductFormState>(createEmptyProductForm);
   const [recipeItems, setRecipeItems] = useState<RecipeDraftItem[]>([createEmptyRecipeDraft()]);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<ProductFilters>({ q: "", productType: "", categoryId: "" });
 
-  async function load() {
-    const [nextProducts, nextCategories] = await Promise.all([
-      api<Product[]>("/products"),
+  async function load(nextFilters: ProductFilters = filters) {
+    const productsPath = buildProductsPath(nextFilters);
+    const [nextVisibleProducts, nextAllProducts, nextCategories] = await Promise.all([
+      api<Product[]>(productsPath),
+      productsPath === "/products" ? Promise.resolve<Product[] | null>(null) : api<Product[]>("/products"),
       api<Category[]>("/categories"),
     ]);
-    setProducts(nextProducts);
+    setVisibleProducts(nextVisibleProducts);
+    setProducts(nextAllProducts ?? nextVisibleProducts);
     setCategories(nextCategories);
     setCategoryDrafts(Object.fromEntries(nextCategories.map((category) => [category.id, category.name])));
   }
@@ -60,6 +83,10 @@ export default function ProductsPage() {
 
   function setFormField<Key extends keyof ProductFormState>(key: Key, value: ProductFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function setFilterField<Key extends keyof ProductFilters>(key: Key, value: ProductFilters[Key]) {
+    setFilters((current) => ({ ...current, [key]: value }));
   }
 
   function resetEditor() {
@@ -373,6 +400,71 @@ export default function ProductsPage() {
       ) : null}
       <Card>
         <CardContent className="p-0">
+          <div className="border-b border-[#f3f3f3] p-4">
+            <form
+              className="grid gap-3 md:grid-cols-[minmax(0,2fr)_180px_220px_auto_auto]"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void load(filters).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat produk."));
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="product-search">Cari produk</Label>
+                <Input
+                  id="product-search"
+                  value={filters.q}
+                  onChange={(event) => setFilterField("q", event.target.value)}
+                  placeholder="Nama atau barcode"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-type-filter">Tipe</Label>
+                <select
+                  id="product-type-filter"
+                  className="h-11 w-full rounded-2xl border border-[#e5e7eb] px-3"
+                  value={filters.productType}
+                  onChange={(event) => setFilterField("productType", event.target.value)}
+                >
+                  <option value="">Semua tipe</option>
+                  <option value="SIMPLE">SIMPLE</option>
+                  <option value="INGREDIENT">INGREDIENT</option>
+                  <option value="RECIPE">RECIPE</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-category-filter">Kategori</Label>
+                <select
+                  id="product-category-filter"
+                  className="h-11 w-full rounded-2xl border border-[#e5e7eb] px-3"
+                  value={filters.categoryId}
+                  onChange={(event) => setFilterField("categoryId", event.target.value)}
+                >
+                  <option value="">Semua kategori</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit" className="self-end">
+                Terapkan
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="self-end"
+                onClick={() => {
+                  const nextFilters = { q: "", productType: "", categoryId: "" };
+                  setFilters(nextFilters);
+                  void load(nextFilters).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat produk."));
+                }}
+              >
+                Reset
+              </Button>
+            </form>
+            <p className="mt-3 text-sm text-[#616161]">Menampilkan {visibleProducts.length} produk.</p>
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-[#616161]">
@@ -387,7 +479,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {visibleProducts.map((product) => (
                 <tr key={product.id} className="border-b border-[#f3f3f3]">
                   <td className="px-4 py-3">
                     <div className="font-medium">{product.name}</div>
@@ -433,6 +525,13 @@ export default function ProductsPage() {
                   </td>
                 </tr>
               ))}
+              {visibleProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-[#616161]">
+                    Tidak ada produk yang cocok dengan filter.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </CardContent>
