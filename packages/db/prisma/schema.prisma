@@ -55,14 +55,17 @@ model Tenant {
 }
 
 model TenantSettings {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId     String   @unique @map("tenant_id") @db.Uuid
-  taxPercent   Decimal  @default(0) @map("tax_percent") @db.Decimal(5, 2)
-  taxInclusive Boolean  @default(true) @map("tax_inclusive")
-  receiptFooter String? @map("receipt_footer")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String    @unique @map("tenant_id") @db.Uuid
+  taxPercent           Decimal   @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  taxInclusive         Boolean   @default(true) @map("tax_inclusive")
+  receiptFooter        String?   @map("receipt_footer")
+  receiptLogoUrl       String?   @map("receipt_logo_url") @db.VarChar(255)
+  receiptQrPayload     String?   @map("receipt_qr_payload") @db.VarChar(255)
+  lastLowStockAlertAt  DateTime? @map("last_low_stock_alert_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@map("tenant_settings")
 }

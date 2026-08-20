@@ -66,6 +66,8 @@ export type SettingsRecord = {
   taxPercent: string;
   taxInclusive: boolean;
   receiptFooter: string | null;
+  receiptLogoUrl: string | null;
+  receiptQrPayload: string | null;
   trialEndDate: string;
   subscriptionStatus: string;
 };

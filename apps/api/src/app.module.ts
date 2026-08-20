@@ -18,6 +18,7 @@ import { ExpensesModule } from "./expenses/expenses.module.js";
 import { ReportsModule } from "./reports/reports.module.js";
 import { BillingModule } from "./billing/billing.module.js";
 import { AdminModule } from "./admin/admin.module.js";
+import { AlertsModule } from "./alerts/alerts.module.js";
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AdminModule } from "./admin/admin.module.js";
     ReportsModule,
     BillingModule,
     AdminModule,
+    AlertsModule,
   ],
   providers: [
     {

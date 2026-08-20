@@ -107,6 +107,8 @@ describe("me and settings", () => {
       taxPercent: "0",
       taxInclusive: true,
       receiptFooter: null,
+      receiptLogoUrl: null,
+      receiptQrPayload: null,
       subscriptionStatus: "TRIAL",
     });
     expect(settings.body.trialEndDate).toEqual(expect.any(String));
@@ -119,6 +121,8 @@ describe("me and settings", () => {
       taxPercent: 11,
       taxInclusive: false,
       receiptFooter: "Terima kasih",
+      receiptLogoUrl: "https://cdn.example.com/logo.png",
+      receiptQrPayload: "Toko Dua · 081234567890",
     });
 
     expect(patched.status).toBe(200);
@@ -130,6 +134,8 @@ describe("me and settings", () => {
       taxPercent: "11",
       taxInclusive: false,
       receiptFooter: "Terima kasih",
+      receiptLogoUrl: "https://cdn.example.com/logo.png",
+      receiptQrPayload: "Toko Dua · 081234567890",
       subscriptionStatus: "TRIAL",
     });
     expect(patched.body.trialEndDate).toEqual(expect.any(String));

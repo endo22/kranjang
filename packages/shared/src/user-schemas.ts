@@ -27,4 +27,6 @@ export const patchSettingsSchema = z.object({
   taxPercent: z.number().min(0).max(100).optional(),
   taxInclusive: z.boolean().optional(),
   receiptFooter: z.string().max(2000).nullable().optional(),
+  receiptLogoUrl: z.string().url().max(255).nullable().optional(),
+  receiptQrPayload: z.string().trim().max(255).nullable().optional(),
 });

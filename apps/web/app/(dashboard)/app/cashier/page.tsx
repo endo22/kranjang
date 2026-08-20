@@ -201,7 +201,7 @@ export default function CashierPage() {
       }),
     })
       .then((sale) => {
-        openReceiptPreview(sale);
+        void openReceiptPreview(sale);
         toast.success("Transaksi tersimpan.");
         clearActiveCart();
         setQuery("");
@@ -249,7 +249,7 @@ export default function CashierPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
-  function openReceiptPreview(sale: SaleResponse) {
+  async function openReceiptPreview(sale: SaleResponse) {
     if (typeof window === "undefined") {
       return;
     }
@@ -257,6 +257,19 @@ export default function CashierPage() {
     const receiptWindow = window.open("", "_blank", "noopener,noreferrer,width=420,height=720");
     if (!receiptWindow) {
       return;
+    }
+
+    const qrPayload =
+      settings?.receiptQrPayload?.trim() ||
+      [settings?.name, settings?.phone].filter(Boolean).join(" · ");
+    let qrDataUrl = "";
+    if (qrPayload) {
+      try {
+        const QRCode = (await import("qrcode")).default;
+        qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 128, margin: 1 });
+      } catch {
+        qrDataUrl = "";
+      }
     }
 
     const rows = sale.items
@@ -269,6 +282,13 @@ export default function CashierPage() {
           </tr>`,
       )
       .join("");
+
+    const logoHtml = settings?.receiptLogoUrl
+      ? `<div class="section" style="text-align:center;"><img src="${escapeHtml(settings.receiptLogoUrl)}" alt="Logo" style="max-width:140px;max-height:56px;object-fit:contain;" /></div>`
+      : "";
+    const qrHtml = qrDataUrl
+      ? `<div class="section" style="text-align:center;"><img src="${qrDataUrl}" alt="QR" width="128" height="128" /><p class="muted">${escapeHtml(qrPayload)}</p></div>`
+      : "";
 
     receiptWindow.document.write(`<!doctype html>
 <html lang="id">
@@ -286,7 +306,8 @@ export default function CashierPage() {
     </style>
   </head>
   <body>
-    <h1 style="font-size:18px;margin:0;">Kranjang</h1>
+    ${logoHtml}
+    <h1 style="font-size:18px;margin:0;">${escapeHtml(settings?.name ?? "Kranjang")}</h1>
     <p class="muted">${escapeHtml(sale.receiptNo)} • ${escapeHtml(new Date(sale.soldAt).toLocaleString("id-ID"))}</p>
     <div class="section">
       <table>
@@ -305,6 +326,7 @@ export default function CashierPage() {
         ? `<div class="section"><p class="muted">${escapeHtml(settings.receiptFooter)}</p></div>`
         : ""
     }
+    ${qrHtml}
     <script>
       window.onload = function () {
         window.print();

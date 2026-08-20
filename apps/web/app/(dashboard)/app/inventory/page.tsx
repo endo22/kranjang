@@ -176,6 +176,20 @@ export default function InventoryPage() {
           <CardDescription>Produk non-resep dengan stok saat ini sudah di bawah atau sama dengan minimum stok.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={lowStockRows.length === 0}
+            onClick={() => {
+              void api<{ count: number; to: string[] }>("/alerts/low-stock", { method: "POST" })
+                .then((result) => {
+                  toast.success(`Alert ${result.count} produk dikirim ke ${result.to.join(", ") || "log/dev"}.`);
+                })
+                .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal mengirim alert"));
+            }}
+          >
+            Kirim alert stok
+          </Button>
           {lowStockRows.length ? (
             lowStockRows.map((row) => (
               <div key={row.id} className="rounded-2xl border border-[#e5e7eb] px-4 py-3 text-sm">

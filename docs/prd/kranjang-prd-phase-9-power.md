@@ -398,6 +398,8 @@ Tiap area: persona, perilaku, acceptance, dampak teknis, out-of-scope lokal.
 
 **Wave 1 (eksekusi):** [docs/superpowers/plans/2026-08-20-kranjang-next-wave-1.md](../superpowers/plans/2026-08-20-kranjang-next-wave-1.md) — shortcut + hold cart + target margin.
 
+**Wave 2 (eksekusi):** [docs/superpowers/plans/2026-08-20-kranjang-next-wave-2.md](../superpowers/plans/2026-08-20-kranjang-next-wave-2.md) — alert stok email + footer struk logo/QR.
+
 ### Later / tetap di luar (PRD v1.1 §5.3)
 
 - Multi-outlet UI + transfer stok
@@ -522,6 +524,7 @@ Overflow masuk lampiran **Next**, bukan diam-diam menambah §5.3.
 - [x] Implementation plan Blok B: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-b.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-b.md)
 - [x] Implementation plan Blok C: [docs/superpowers/plans/2026-08-20-kranjang-phase-9-block-c.md](../superpowers/plans/2026-08-20-kranjang-phase-9-block-c.md)
 - [x] Next Wave 1 plan: [docs/superpowers/plans/2026-08-20-kranjang-next-wave-1.md](../superpowers/plans/2026-08-20-kranjang-next-wave-1.md)
+- [x] Next Wave 2 plan: [docs/superpowers/plans/2026-08-20-kranjang-next-wave-2.md](../superpowers/plans/2026-08-20-kranjang-next-wave-2.md)
 - [x] Update pointer roadmap di [kranjang-prd.md](./kranjang-prd.md) §18.
 
 ---

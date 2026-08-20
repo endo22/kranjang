@@ -18,6 +18,8 @@ type SettingsFormState = {
   taxPercent: string;
   taxInclusive: boolean;
   receiptFooter: string;
+  receiptLogoUrl: string;
+  receiptQrPayload: string;
 };
 
 function getErrorMessage(error: unknown) {
@@ -37,6 +39,8 @@ function toFormState(settings: SettingsRecord): SettingsFormState {
     taxPercent: settings.taxPercent,
     taxInclusive: settings.taxInclusive,
     receiptFooter: settings.receiptFooter ?? "",
+    receiptLogoUrl: settings.receiptLogoUrl ?? "",
+    receiptQrPayload: settings.receiptQrPayload ?? "",
   };
 }
 
@@ -80,10 +84,12 @@ export default function SettingsPage() {
       taxPercent,
       taxInclusive: form.taxInclusive,
       receiptFooter: form.receiptFooter.trim() ? form.receiptFooter.trim() : null,
+      receiptLogoUrl: form.receiptLogoUrl.trim() ? form.receiptLogoUrl.trim() : null,
+      receiptQrPayload: form.receiptQrPayload.trim() ? form.receiptQrPayload.trim() : null,
     });
 
     if (!parsed.success || Number.isNaN(taxPercent)) {
-      setError("Periksa kembali nama usaha, telepon, timezone, pajak, dan footer struk.");
+      setError("Periksa kembali nama usaha, telepon, timezone, pajak, footer struk, dan URL logo.");
       return;
     }
 
@@ -176,6 +182,32 @@ export default function SettingsPage() {
                 rows={5}
                 className="flex w-full rounded-2xl border border-[#d9d9dd] bg-white px-3 py-3 text-sm text-[#212121] outline-none focus-visible:border-[#9b60aa]"
               />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="settings-logo">URL logo struk</Label>
+                <Input
+                  id="settings-logo"
+                  type="url"
+                  placeholder="https://..."
+                  value={form.receiptLogoUrl}
+                  onChange={(event) =>
+                    setForm((current) => (current ? { ...current, receiptLogoUrl: event.target.value } : current))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-qr">Teks QR struk</Label>
+                <Input
+                  id="settings-qr"
+                  placeholder="Kosongkan = nama · telepon toko"
+                  value={form.receiptQrPayload}
+                  onChange={(event) =>
+                    setForm((current) => (current ? { ...current, receiptQrPayload: event.target.value } : current))
+                  }
+                />
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

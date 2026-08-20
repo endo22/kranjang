@@ -21,24 +21,39 @@ export class SettingsService {
 
   async patch(currentUser: JwtPayload, body: PatchSettingsBody) {
     const current = await this.getScopedTenant(currentUser.tid);
+    const nextAudit = {
+      name: body.name !== undefined ? body.name : current.name,
+      phone: body.phone !== undefined ? body.phone : current.phone,
+      timezone: body.timezone !== undefined ? body.timezone : current.timezone,
+      allowNegativeStock:
+        body.allowNegativeStock !== undefined ? body.allowNegativeStock : current.allowNegativeStock,
+      taxPercent: body.taxPercent !== undefined ? body.taxPercent : Number(current.settings.taxPercent),
+      taxInclusive: body.taxInclusive !== undefined ? body.taxInclusive : current.settings.taxInclusive,
+      receiptFooter: body.receiptFooter !== undefined ? body.receiptFooter : current.settings.receiptFooter,
+      receiptLogoUrl: body.receiptLogoUrl !== undefined ? body.receiptLogoUrl : current.settings.receiptLogoUrl,
+      receiptQrPayload:
+        body.receiptQrPayload !== undefined ? body.receiptQrPayload || null : current.settings.receiptQrPayload,
+    };
 
     await this.prisma.$transaction(async (tx) => {
       await tx.tenant.update({
         where: { id: currentUser.tid },
         data: {
-          name: body.name,
-          phone: body.phone,
-          timezone: body.timezone,
-          allowNegativeStock: body.allowNegativeStock,
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.phone !== undefined ? { phone: body.phone } : {}),
+          ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+          ...(body.allowNegativeStock !== undefined ? { allowNegativeStock: body.allowNegativeStock } : {}),
         },
       });
 
       await tx.tenantSettings.update({
         where: { tenantId: currentUser.tid },
         data: {
-          taxPercent: body.taxPercent,
-          taxInclusive: body.taxInclusive,
-          receiptFooter: body.receiptFooter,
+          ...(body.taxPercent !== undefined ? { taxPercent: body.taxPercent } : {}),
+          ...(body.taxInclusive !== undefined ? { taxInclusive: body.taxInclusive } : {}),
+          ...(body.receiptFooter !== undefined ? { receiptFooter: body.receiptFooter } : {}),
+          ...(body.receiptLogoUrl !== undefined ? { receiptLogoUrl: body.receiptLogoUrl } : {}),
+          ...(body.receiptQrPayload !== undefined ? { receiptQrPayload: body.receiptQrPayload || null } : {}),
         },
       });
 
@@ -51,15 +66,7 @@ export class SettingsService {
           entity: "tenant",
           entityId: currentUser.tid,
           oldValue: this.toAuditSettingsSnapshot(current),
-          newValue: {
-            name: body.name,
-            phone: body.phone,
-            timezone: body.timezone,
-            allowNegativeStock: body.allowNegativeStock,
-            taxPercent: body.taxPercent,
-            taxInclusive: body.taxInclusive,
-            receiptFooter: body.receiptFooter,
-          },
+          newValue: nextAudit,
         },
       });
     });
@@ -94,6 +101,8 @@ export class SettingsService {
       taxPercent: tenant.settings.taxPercent.toString(),
       taxInclusive: tenant.settings.taxInclusive,
       receiptFooter: tenant.settings.receiptFooter,
+      receiptLogoUrl: tenant.settings.receiptLogoUrl,
+      receiptQrPayload: tenant.settings.receiptQrPayload,
       trialEndDate: tenant.trialEndDate.toISOString(),
       subscriptionStatus: tenant.subscriptionStatus,
     };
@@ -108,6 +117,8 @@ export class SettingsService {
       taxPercent: Number(tenant.settings.taxPercent),
       taxInclusive: tenant.settings.taxInclusive,
       receiptFooter: tenant.settings.receiptFooter,
+      receiptLogoUrl: tenant.settings.receiptLogoUrl,
+      receiptQrPayload: tenant.settings.receiptQrPayload,
     };
   }
 }
