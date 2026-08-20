@@ -28,6 +28,10 @@ export const productSchema = z.object({
   imageUrl: z.string().url().max(255).optional().nullable(),
 });
 
+export const patchProductSchema = productSchema.partial().refine((body) => Object.keys(body).length > 0, {
+  message: "Body tidak boleh kosong.",
+});
+
 export const recipeSchema = z.object({
   items: z
     .array(

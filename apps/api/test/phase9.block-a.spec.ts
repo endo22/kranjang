@@ -3,6 +3,102 @@ import request from "supertest";
 import { createApp, register, uniqueEmail } from "./helpers.js";
 
 describe("phase 9 block A", () => {
+  it("filters products by q, categoryId, productType and returns catalog fields", async () => {
+    const app = await createApp();
+    const email = uniqueEmail();
+    const created = await register(app, { email, businessName: `Warung ${email.slice(0, 8)}` });
+    expect(created.status).toBe(201);
+    const auth = { Authorization: `Bearer ${created.body.accessToken}` };
+    const server = request(app.getHttpServer());
+
+    const drinks = await server.post("/api/v1/categories").set(auth).send({ name: "Minuman" });
+    expect(drinks.status).toBe(201);
+
+    const foods = await server.post("/api/v1/categories").set(auth).send({ name: "Makanan" });
+    expect(foods.status).toBe(201);
+
+    const air = await server.post("/api/v1/products").set(auth).send({
+      name: "Air Mineral",
+      productType: "SIMPLE",
+      unit: "botol",
+      categoryId: drinks.body.id,
+      barcode: "AIR-001",
+      buyPrice: 2000,
+      sellPrice: 5000,
+      minStock: 3,
+      isActive: true,
+      imageUrl: "https://example.com/air.jpg",
+    });
+    expect(air.status).toBe(201);
+
+    const mie = await server.post("/api/v1/products").set(auth).send({
+      name: "Mie Instan",
+      productType: "INGREDIENT",
+      unit: "pcs",
+      categoryId: foods.body.id,
+      barcode: "MIE-001",
+      buyPrice: 1500,
+      sellPrice: 2500,
+      minStock: 8,
+      isActive: false,
+    });
+    expect(mie.status).toBe(201);
+
+    const filtered = await server
+      .get(`/api/v1/products?q=Air&categoryId=${drinks.body.id}&productType=SIMPLE`)
+      .set(auth);
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.body).toHaveLength(1);
+    expect(filtered.body[0]).toMatchObject({
+      id: air.body.id,
+      name: "Air Mineral",
+      productType: "SIMPLE",
+      categoryId: drinks.body.id,
+      barcode: "AIR-001",
+      minStock: 3,
+      isActive: true,
+      imageUrl: "https://example.com/air.jpg",
+    });
+
+    await app.close();
+  }, 60000);
+
+  it("updates product minStock and barcode via patch", async () => {
+    const app = await createApp();
+    const email = uniqueEmail();
+    const created = await register(app, { email, businessName: `Warung ${email.slice(0, 8)}` });
+    expect(created.status).toBe(201);
+    const auth = { Authorization: `Bearer ${created.body.accessToken}` };
+    const server = request(app.getHttpServer());
+
+    const product = await server.post("/api/v1/products").set(auth).send({
+      name: "Susu UHT",
+      productType: "SIMPLE",
+      unit: "kotak",
+      buyPrice: 4000,
+      sellPrice: 7000,
+      minStock: 1,
+    });
+    expect(product.status).toBe(201);
+
+    const updated = await server.patch(`/api/v1/products/${product.body.id}`).set(auth).send({
+      minStock: 6,
+      barcode: "SUSU-999",
+    });
+
+    expect(updated.status).toBe(200);
+    expect(updated.body.minStock).toBe(6);
+    expect(updated.body.barcode).toBe("SUSU-999");
+
+    const fetched = await server.get(`/api/v1/products/${product.body.id}`).set(auth);
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.minStock).toBe(6);
+    expect(fetched.body.barcode).toBe("SUSU-999");
+
+    await app.close();
+  }, 60000);
+
   it("closes cashier session with cash difference summary", async () => {
     const app = await createApp();
     const email = uniqueEmail();

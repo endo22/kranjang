@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { categorySchema, productSchema, recipeSchema } from "@kranjang/shared";
+import type { categorySchema, patchProductSchema, productSchema, recipeSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
@@ -9,6 +9,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 
 type CategoryBody = z.infer<typeof categorySchema>;
 type ProductBody = z.infer<typeof productSchema>;
+type PatchProductBody = z.infer<typeof patchProductSchema>;
 type RecipeBody = z.infer<typeof recipeSchema>;
 
 @Injectable()
@@ -66,18 +67,22 @@ export class CatalogService {
     return { success: true };
   }
 
-  async listProducts(currentUser: JwtPayload, query?: { type?: string; search?: string }) {
+  async listProducts(
+    currentUser: JwtPayload,
+    query?: { q?: string; categoryId?: string; productType?: string; activeOnly?: boolean },
+  ) {
     const products = await this.prisma.product.findMany({
       where: {
         tenantId: currentUser.tid,
         deletedAt: null,
-        ...(query?.type ? { productType: query.type } : {}),
-        ...(query?.search
+        ...(query?.categoryId ? { categoryId: query.categoryId } : {}),
+        ...(query?.productType ? { productType: query.productType } : {}),
+        ...(query?.activeOnly ? { isActive: true } : {}),
+        ...(query?.q
           ? {
               OR: [
-                { name: { contains: query.search, mode: "insensitive" } },
-                { sku: { contains: query.search, mode: "insensitive" } },
-                { barcode: { contains: query.search, mode: "insensitive" } },
+                { name: { contains: query.q, mode: "insensitive" } },
+                { barcode: query.q },
               ],
             }
           : {}),
@@ -90,17 +95,7 @@ export class CatalogService {
   }
 
   async getProduct(currentUser: JwtPayload, id: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id, tenantId: currentUser.tid, deletedAt: null },
-      include: {
-        category: true,
-        images: true,
-        recipeAsMenu: { include: { ingredient: true } },
-      },
-    });
-    if (!product) {
-      throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
-    }
+    const product = await this.getProductRecord(currentUser, id);
     return this.toProduct(product);
   }
 
@@ -153,33 +148,35 @@ export class CatalogService {
     return this.getProduct(currentUser, product.id);
   }
 
-  async updateProduct(currentUser: JwtPayload, id: string, body: ProductBody) {
+  async updateProduct(currentUser: JwtPayload, id: string, body: PatchProductBody) {
     const { tenant } = await requireTenantOutlet(this.prisma, currentUser);
     assertWritableSubscription(tenant.subscriptionStatus);
-    await this.getProduct(currentUser, id);
+    const currentProduct = await this.getProductRecord(currentUser, id);
 
     await this.prisma.product.update({
-      where: { id },
+      where: { id, tenantId: currentUser.tid, deletedAt: null },
       data: {
-        name: body.name,
-        productType: body.productType,
-        unit: body.unit,
-        categoryId: body.categoryId,
-        supplierId: body.supplierId,
-        sku: body.sku,
-        barcode: body.barcode,
-        buyPrice: body.buyPrice,
-        sellPrice: body.sellPrice,
-        minStock: body.minStock ?? 0,
-        isActive: body.isActive ?? true,
+        name: "name" in body ? body.name : currentProduct.name,
+        productType: "productType" in body ? body.productType : currentProduct.productType,
+        unit: "unit" in body ? body.unit : currentProduct.unit,
+        categoryId: "categoryId" in body ? body.categoryId : currentProduct.categoryId,
+        supplierId: "supplierId" in body ? body.supplierId : currentProduct.supplierId,
+        sku: "sku" in body ? body.sku : currentProduct.sku,
+        barcode: "barcode" in body ? body.barcode : currentProduct.barcode,
+        buyPrice: "buyPrice" in body ? body.buyPrice : asNumber(currentProduct.buyPrice),
+        sellPrice: "sellPrice" in body ? body.sellPrice : asNumber(currentProduct.sellPrice),
+        minStock: "minStock" in body ? (body.minStock ?? 0) : asNumber(currentProduct.minStock),
+        isActive: "isActive" in body ? (body.isActive ?? true) : currentProduct.isActive,
       },
     });
 
-    if (body.imageUrl) {
+    if ("imageUrl" in body) {
       await this.prisma.productImage.deleteMany({ where: { productId: id, tenantId: currentUser.tid } });
-      await this.prisma.productImage.create({
-        data: { tenantId: currentUser.tid, productId: id, storagePath: body.imageUrl },
-      });
+      if (body.imageUrl) {
+        await this.prisma.productImage.create({
+          data: { tenantId: currentUser.tid, productId: id, storagePath: body.imageUrl },
+        });
+      }
     }
 
     return this.getProduct(currentUser, id);
@@ -249,6 +246,21 @@ export class CatalogService {
       throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
     }
     return category;
+  }
+
+  private async getProductRecord(currentUser: JwtPayload, id: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, tenantId: currentUser.tid, deletedAt: null },
+      include: {
+        category: true,
+        images: true,
+        recipeAsMenu: { include: { ingredient: true } },
+      },
+    });
+    if (!product) {
+      throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
+    }
+    return product;
   }
 
   private toProduct(product: {
