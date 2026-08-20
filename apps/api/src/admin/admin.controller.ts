@@ -1,4 +1,4 @@
-import { Body, CanActivate, Controller, ExecutionContext, Get, Inject, Injectable, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, CanActivate, Controller, ExecutionContext, Get, Inject, Injectable, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { adminLoginSchema, adminPlanSchema, adminTenantStatusSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -36,8 +36,8 @@ export class AdminController {
 
   @Get("tenants")
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
-  tenants() {
-    return this.adminService.listTenants();
+  tenants(@Query("q") q?: string) {
+    return this.adminService.listTenants(q);
   }
 
   @Patch("tenants/:id/status")

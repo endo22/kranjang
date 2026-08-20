@@ -18,7 +18,10 @@ export class ExpensesService {
     });
   }
 
-  async list(currentUser: JwtPayload, range: { from?: string; to?: string } = {}) {
+  async list(
+    currentUser: JwtPayload,
+    range: { from?: string; to?: string; limit?: number; offset?: number } = {},
+  ) {
     const expenseDate =
       range.from || range.to
         ? {
@@ -26,16 +29,24 @@ export class ExpensesService {
             ...(range.to ? { lte: new Date(`${range.to}T23:59:59.999Z`) } : {}),
           }
         : undefined;
-    const rows = await this.prisma.expense.findMany({
-      where: {
-        tenantId: currentUser.tid,
-        deletedAt: null,
-        ...(expenseDate ? { expenseDate } : {}),
-      },
-      include: { category: true },
-      orderBy: { expenseDate: "desc" },
-    });
-    return rows.map((row) => this.toExpense(row));
+    const where = {
+      tenantId: currentUser.tid,
+      deletedAt: null,
+      ...(expenseDate ? { expenseDate } : {}),
+    };
+    const limit = range.limit ?? 50;
+    const offset = range.offset ?? 0;
+    const [total, rows] = await Promise.all([
+      this.prisma.expense.count({ where }),
+      this.prisma.expense.findMany({
+        where,
+        include: { category: true },
+        orderBy: { expenseDate: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+    return { items: rows.map((row) => this.toExpense(row)), total };
   }
 
   async create(currentUser: JwtPayload, body: z.infer<typeof expenseSchema>) {

@@ -14,16 +14,20 @@ type PatchSettingsBody = z.infer<typeof patchSettingsSchema>;
 
 @Controller("settings")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
-@RequirePermissions("settings.manage")
 export class SettingsController {
   constructor(@Inject(SettingsService) private readonly settingsService: SettingsService) {}
 
   @Get()
   async get(@CurrentUser() currentUser: JwtPayload | undefined) {
-    return this.settingsService.get(this.requireUser(currentUser));
+    const user = this.requireUser(currentUser);
+    if (!user.perms.includes("settings.manage") && !user.perms.includes("sales.create")) {
+      throw new AppError("FORBIDDEN", "Anda tidak memiliki izin untuk aksi ini.", 403);
+    }
+    return this.settingsService.get(user);
   }
 
   @Patch()
+  @RequirePermissions("settings.manage")
   async patch(
     @CurrentUser() currentUser: JwtPayload | undefined,
     @Body(new ZodPipe(patchSettingsSchema)) body: PatchSettingsBody,

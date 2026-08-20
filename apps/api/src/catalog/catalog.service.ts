@@ -94,29 +94,41 @@ export class CatalogService {
 
   async listProducts(
     currentUser: JwtPayload,
-    query?: { q?: string; categoryId?: string; productType?: string; activeOnly?: boolean },
+    query?: {
+      q?: string;
+      categoryId?: string;
+      productType?: string;
+      activeOnly?: boolean;
+      limit?: number;
+      offset?: number;
+    },
   ) {
-    const products = await this.prisma.product.findMany({
-      where: {
-        tenantId: currentUser.tid,
-        deletedAt: null,
-        ...(query?.categoryId ? { categoryId: query.categoryId } : {}),
-        ...(query?.productType ? { productType: query.productType } : {}),
-        ...(query?.activeOnly ? { isActive: true } : {}),
-        ...(query?.q
-          ? {
-              OR: [
-                { name: { contains: query.q, mode: "insensitive" } },
-                { barcode: query.q },
-              ],
-            }
-          : {}),
-      },
-      include: { category: true, images: true, recipeAsMenu: true },
-      orderBy: { name: "asc" },
-    });
+    const where = {
+      tenantId: currentUser.tid,
+      deletedAt: null,
+      ...(query?.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(query?.productType ? { productType: query.productType } : {}),
+      ...(query?.activeOnly ? { isActive: true } : {}),
+      ...(query?.q
+        ? {
+            OR: [{ name: { contains: query.q, mode: "insensitive" as const } }, { barcode: query.q }],
+          }
+        : {}),
+    };
+    const limit = query?.limit ?? 50;
+    const offset = query?.offset ?? 0;
+    const [total, products] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        include: { category: true, images: true, recipeAsMenu: true },
+        orderBy: { name: "asc" },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
 
-    return products.map((product) => this.toProduct(product));
+    return { items: products.map((product) => this.toProduct(product)), total };
   }
 
   async getProduct(currentUser: JwtPayload, id: string) {

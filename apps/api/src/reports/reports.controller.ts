@@ -38,7 +38,7 @@ export class ReportsController {
     @Res() response: Response,
   ) {
     const range = this.range(from, to);
-    const file = await this.reportsService.export(this.require(user), type, range.from, range.to, format === "pdf" ? "pdf" : "xlsx");
+    const file = await this.reportsService.export(this.require(user), type, range.from, range.to, format === "pdf" ? "pdf" : "csv");
     response.setHeader("Content-Type", file.contentType);
     response.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
     response.send(file.body);

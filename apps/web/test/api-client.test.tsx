@@ -159,4 +159,14 @@ describe("api client", () => {
     assert.equal(init.body, '{"openingCash":0}');
     assert.equal(new Headers(init.headers).get("content-type"), "application/json");
   });
+
+  it("treats empty 200 body as null", async () => {
+    const fetchMock = mock.fn(async () => new Response("", { status: 200 }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await api<{ id: string } | null>("/cashier-sessions/current");
+
+    assert.equal(result, null);
+    assert.equal(fetchMock.mock.calls.length, 1);
+  });
 });

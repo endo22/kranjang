@@ -13,7 +13,7 @@ describe("inventory page helpers", () => {
 
     assert.equal(
       path,
-      "/inventory/movements?from=2026-08-20T00%3A00%3A00.000%2B07%3A00&to=2026-08-21T23%3A59%3A59.999%2B07%3A00&productId=product-1",
+      "/inventory/movements?from=2026-08-20T00%3A00%3A00.000%2B07%3A00&to=2026-08-21T23%3A59%3A59.999%2B07%3A00&productId=product-1&limit=50&offset=0",
     );
   });
 

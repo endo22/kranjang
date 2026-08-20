@@ -51,9 +51,20 @@ export class AdminService {
     };
   }
 
-  listTenants() {
+  listTenants(q?: string) {
     return this.prisma.tenant.findMany({
-      where: { deletedAt: null },
+      where: {
+        deletedAt: null,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { slug: { contains: q, mode: "insensitive" } },
+                { email: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -103,7 +114,21 @@ export class AdminService {
   }
 
   listAuditLogs() {
-    return this.prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+    return this.prisma.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { user: { select: { name: true, email: true } } },
+    }).then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        action: row.action,
+        module: row.module,
+        entity: row.entity,
+        entityId: row.entityId,
+        createdAt: row.createdAt.toISOString(),
+        actor: row.user ? { name: row.user.name, email: row.user.email } : null,
+      })),
+    );
   }
 
   async ensureSeedAdmin() {

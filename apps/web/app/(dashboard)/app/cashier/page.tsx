@@ -74,13 +74,13 @@ export default function CashierPage() {
 
   async function load() {
     const [nextProducts, nextCategories, nextSettings, current, nextCustomers] = await Promise.all([
-      api<Product[]>("/products"),
+      api<{ items: Product[] }>("/products?limit=100"),
       api<Category[]>("/categories"),
       api<SettingsRecord>("/settings"),
       api<{ id: string } | null>("/cashier-sessions/current"),
       api<Customer[]>("/customers"),
     ]);
-    setProducts(nextProducts);
+    setProducts(nextProducts.items);
     setCategories(nextCategories);
     setSettings(nextSettings);
     setSession(current);

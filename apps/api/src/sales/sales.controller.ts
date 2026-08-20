@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import { cashierCloseSchema, cashierOpenSchema, dateRangeQuerySchema, saleCancelSchema, saleSchema } from "@kranjang/shared";
+import type { Response } from "express";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
+import { parsePagination } from "../common/pagination.js";
 import { PermissionsGuard } from "../common/permissions.guard.js";
 import { RequirePermissions } from "../common/require-permissions.js";
 import { ZodPipe } from "../common/zod.pipe.js";
@@ -17,8 +19,10 @@ export class SalesController {
 
   @Get("cashier-sessions/current")
   @RequirePermissions("sales.create")
-  current(@CurrentUser() user: JwtPayload | undefined) {
-    return this.salesService.currentSession(this.require(user));
+  async current(@CurrentUser() user: JwtPayload | undefined, @Res() response: Response) {
+    const session = await this.salesService.currentSession(this.require(user));
+    // Nest omits the body when returning null; send explicit JSON null for clients.
+    return response.status(HttpStatus.OK).json(session);
   }
 
   @Post("cashier-sessions/open")
@@ -45,12 +49,14 @@ export class SalesController {
     @Query("from") from?: string,
     @Query("to") to?: string,
     @Query("status") status?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
   ) {
     const parsed = dateRangeQuerySchema.safeParse({ from, to, status });
     if (!parsed.success) {
       throw new AppError("VALIDATION_ERROR", "Data tidak valid", 400, { issues: parsed.error.issues });
     }
-    return this.salesService.listSales(this.require(user), parsed.data);
+    return this.salesService.listSales(this.require(user), { ...parsed.data, ...parsePagination(limit, offset) });
   }
 
   @Get("sales/:id")

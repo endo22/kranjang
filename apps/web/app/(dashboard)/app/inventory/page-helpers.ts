@@ -32,8 +32,10 @@ export function buildInventoryMovementsPath(filters: MovementFilters) {
     params.set("productId", filters.productId);
   }
 
-  const query = params.toString();
-  return query ? `/inventory/movements?${query}` : "/inventory/movements";
+  params.set("limit", "50");
+  params.set("offset", "0");
+
+  return `/inventory/movements?${params.toString()}`;
 }
 
 export function validateInventoryAdjustment(draft: InventoryAdjustmentDraft) {

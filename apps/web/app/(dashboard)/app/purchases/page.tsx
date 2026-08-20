@@ -36,14 +36,14 @@ export default function PurchasesPage() {
   async function load() {
     const [nextSuppliers, nextProducts, nextRows] = await Promise.all([
       api<Supplier[]>("/suppliers"),
-      api<Product[]>("/products"),
-      api<Purchase[]>("/purchases"),
+      api<{ items: Product[] }>("/products?limit=100"),
+      api<{ items: Purchase[] }>("/purchases?limit=50"),
     ]);
     setSuppliers(nextSuppliers);
-    setProducts(nextProducts);
-    setRows(nextRows);
+    setProducts(nextProducts.items);
+    setRows(nextRows.items);
     setSupplierId((value) => value || nextSuppliers[0]?.id || "");
-    setProductId((value) => value || nextProducts[0]?.id || "");
+    setProductId((value) => value || nextProducts.items[0]?.id || "");
   }
 
   useEffect(() => {

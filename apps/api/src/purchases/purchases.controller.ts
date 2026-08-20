@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { purchaseSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
+import { parsePagination } from "../common/pagination.js";
 import { PermissionsGuard } from "../common/permissions.guard.js";
 import { RequirePermissions } from "../common/require-permissions.js";
 import { ZodPipe } from "../common/zod.pipe.js";
@@ -17,8 +18,12 @@ export class PurchasesController {
 
   @Get()
   @RequirePermissions("purchase.view")
-  list(@CurrentUser() user: JwtPayload | undefined) {
-    return this.purchasesService.list(this.require(user));
+  list(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    return this.purchasesService.list(this.require(user), parsePagination(limit, offset));
   }
 
   @Get(":id")

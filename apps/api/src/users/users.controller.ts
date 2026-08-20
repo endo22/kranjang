@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { createUserSchema, updateUserSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -20,8 +20,11 @@ export class UsersController {
   constructor(@Inject(UsersService) private readonly usersService: UsersService) {}
 
   @Get()
-  async list(@CurrentUser() currentUser: JwtPayload | undefined) {
-    return this.usersService.list(this.requireUser(currentUser));
+  async list(
+    @CurrentUser() currentUser: JwtPayload | undefined,
+    @Query("includeInactive") includeInactive?: string,
+  ) {
+    return this.usersService.list(this.requireUser(currentUser), includeInactive === "1" || includeInactive === "true");
   }
 
   @Get(":id")
@@ -45,6 +48,11 @@ export class UsersController {
     @Body(new ZodPipe(updateUserSchema)) body: UpdateBody,
   ) {
     return this.usersService.update(this.requireUser(currentUser), id, body);
+  }
+
+  @Post(":id/restore")
+  async restore(@CurrentUser() currentUser: JwtPayload | undefined, @Param("id") id: string) {
+    return this.usersService.restore(this.requireUser(currentUser), id);
   }
 
   @Delete(":id")

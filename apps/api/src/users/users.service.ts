@@ -47,11 +47,11 @@ function hasUniqueTarget(error: unknown, field: string): boolean {
 export class UsersService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async list(currentUser: JwtPayload) {
+  async list(currentUser: JwtPayload, includeInactive = false) {
     const users = await this.prisma.user.findMany({
       where: {
         tenantId: currentUser.tid,
-        deletedAt: null,
+        ...(includeInactive ? {} : { deletedAt: null }),
       },
       include: userInclude,
       orderBy: { createdAt: "asc" },
@@ -187,7 +187,7 @@ export class UsersService {
 
   async softDelete(currentUser: JwtPayload, id: string) {
     if (id === currentUser.sub) {
-      throw new AppError("VALIDATION_ERROR", "Anda tidak dapat menghapus akun sendiri.", 400);
+      throw new AppError("VALIDATION_ERROR", "Anda tidak dapat menonaktifkan akun sendiri.", 400);
     }
 
     const user = await this.getScopedUser(currentUser.tid, id);
@@ -222,6 +222,40 @@ export class UsersService {
         },
       });
     });
+  }
+
+  async restore(currentUser: JwtPayload, id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, tenantId: currentUser.tid, deletedAt: { not: null } },
+      include: userInclude,
+    });
+    if (!user) {
+      throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
+    }
+
+    const assignedRole = this.getAssignedRole(user);
+    const restored = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: user.id },
+        data: { deletedAt: null },
+        include: userInclude,
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: currentUser.tid,
+          userId: currentUser.sub,
+          action: "RESTORE",
+          module: "user",
+          entity: "user",
+          entityId: user.id,
+          oldValue: this.toAuditUserSnapshot(user, assignedRole.name),
+          newValue: this.toAuditUserSnapshot(updated, assignedRole.name),
+        },
+      });
+      return updated;
+    });
+
+    return this.toUserResponse(restored);
   }
 
   private async getScopedUser(tenantId: string, id: string) {
@@ -315,6 +349,7 @@ export class UsersService {
         name: role.name,
       },
       createdAt: user.createdAt.toISOString(),
+      deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
     };
   }
 

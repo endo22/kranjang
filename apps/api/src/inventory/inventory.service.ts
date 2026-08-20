@@ -82,7 +82,10 @@ export async function applyStockMovement(
 export class InventoryService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async movements(currentUser: JwtPayload, query: { from?: string; to?: string; productId?: string }) {
+  async movements(
+    currentUser: JwtPayload,
+    query: { from?: string; to?: string; productId?: string; limit?: number; offset?: number },
+  ) {
     const where: Prisma.StockMovementWhereInput = { tenantId: currentUser.tid };
 
     if (query.productId) {
@@ -99,23 +102,32 @@ export class InventoryService {
       }
     }
 
-    const rows = await this.prisma.stockMovement.findMany({
-      where,
-      include: { product: true },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    });
-    return rows.map((row) => ({
-      id: row.id,
-      productId: row.productId,
-      productName: row.product.name,
-      movementType: row.movementType,
-      quantity: asNumber(row.quantity),
-      stockBefore: asNumber(row.stockBefore),
-      stockAfter: asNumber(row.stockAfter),
-      createdAt: row.createdAt.toISOString(),
-      notes: row.notes,
-    }));
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const [total, rows] = await Promise.all([
+      this.prisma.stockMovement.count({ where }),
+      this.prisma.stockMovement.findMany({
+        where,
+        include: { product: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        productId: row.productId,
+        productName: row.product.name,
+        movementType: row.movementType,
+        quantity: asNumber(row.quantity),
+        stockBefore: asNumber(row.stockBefore),
+        stockAfter: asNumber(row.stockAfter),
+        createdAt: row.createdAt.toISOString(),
+        notes: row.notes,
+      })),
+      total,
+    };
   }
 
   async adjust(currentUser: JwtPayload, body: z.infer<typeof inventoryAdjustSchema>) {

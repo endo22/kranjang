@@ -32,8 +32,9 @@ export default function SalesPage() {
   const [cancelReason, setCancelReason] = useState("");
 
   async function load() {
-    const params = new URLSearchParams({ from, to });
-    setRows(await api(`/sales?${params.toString()}`));
+    const params = new URLSearchParams({ from, to, limit: "50", offset: "0" });
+    const page = await api<{ items: Sale[] }>(`/sales?${params.toString()}`);
+    setRows(page.items);
   }
 
   useEffect(() => {

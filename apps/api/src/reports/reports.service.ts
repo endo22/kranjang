@@ -1,9 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
-import { jakartaDayEndExclusive, jakartaDayStart } from "../common/dates.js";
+import { jakartaDayEndExclusive, jakartaDayStart, previousPeriodRange } from "../common/dates.js";
 import { asNumber, roundMoney } from "../common/money.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+
+function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) {
+    return current === 0 ? 0 : null;
+  }
+  return roundMoney(((current - previous) / Math.abs(previous)) * 100);
+}
 
 @Injectable()
 export class ReportsService {
@@ -60,6 +67,9 @@ export class ReportsService {
       .filter((product) => product.productType !== "RECIPE" && asNumber(product.stock) <= asNumber(product.minStock))
       .map((product) => ({ id: product.id, name: product.name, stock: asNumber(product.stock), minStock: asNumber(product.minStock) }));
 
+    const previous = previousPeriodRange(from, to);
+    const prevSummary = await this.periodTotals(tid, previous.from, previous.to);
+
     return {
       from,
       to,
@@ -72,6 +82,14 @@ export class ReportsService {
         transactionCount: sales.length,
         topProducts,
         lowStock,
+        previous: {
+          from: previous.from,
+          to: previous.to,
+          revenue: prevSummary.revenue,
+          netProfit: prevSummary.netProfit,
+        },
+        salesChangePct: pctChange(revenue, prevSummary.revenue),
+        profitChangePct: pctChange(netProfit, prevSummary.netProfit),
       },
       profitLoss: { revenue, cogs, grossProfit, expense: expenseTotal, netProfit },
       cashFlow: { cashIn, cashOut, net: roundMoney(cashIn - cashOut) },
@@ -107,6 +125,23 @@ export class ReportsService {
     };
   }
 
+  private async periodTotals(tenantId: string, from: string, to: string) {
+    const start = jakartaDayStart(from);
+    const end = jakartaDayEndExclusive(to);
+    const sales = await this.prisma.sale.findMany({
+      where: { tenantId, status: "COMPLETED", soldAt: { gte: start, lt: end } },
+      include: { items: true },
+    });
+    const expenses = await this.prisma.expense.findMany({
+      where: { tenantId, deletedAt: null, expenseDate: { gte: start, lt: end } },
+    });
+    const revenue = roundMoney(sales.reduce((sum, sale) => sum + asNumber(sale.totalNet), 0));
+    const cogs = roundMoney(sales.reduce((sum, sale) => sum + sale.items.reduce((line, item) => line + asNumber(item.cogsAmount), 0), 0));
+    const expenseTotal = roundMoney(expenses.reduce((sum, row) => sum + asNumber(row.amount), 0));
+    const netProfit = roundMoney(revenue - cogs - expenseTotal);
+    return { revenue, netProfit };
+  }
+
   async export(currentUser: JwtPayload, type: string, from: string, to: string, format: string) {
     const data = await this.summary(currentUser, from, to);
     const rows = this.rowsFor(type, data);
@@ -128,11 +163,33 @@ export class ReportsService {
       case "inventory":
         return [["Produk", "Tipe", "Qty", "Waktu"], ...data.inventory.movements.map((row) => [row.productName, row.movementType, String(row.quantity), row.createdAt])];
       case "profit-loss":
-        return [["Metrik", "Nilai"], ["Revenue", String(data.profitLoss.revenue)], ["HPP", String(data.profitLoss.cogs)], ["Laba kotor", String(data.profitLoss.grossProfit)], ["Biaya", String(data.profitLoss.expense)], ["Laba bersih", String(data.profitLoss.netProfit)]];
+        return [
+          ["Metrik", "Nilai"],
+          ["Revenue", String(data.profitLoss.revenue)],
+          ["HPP", String(data.profitLoss.cogs)],
+          ["Laba kotor", String(data.profitLoss.grossProfit)],
+          ["Biaya", String(data.profitLoss.expense)],
+          ["Laba bersih", String(data.profitLoss.netProfit)],
+        ];
       case "product-profitability":
-        return [["Produk", "Qty", "Omzet", "HPP", "Laba", "Margin"], ...data.productProfitability.map((row) => [row.name, String(row.qty), String(row.revenue), String(row.cogs), String(row.profit), String(row.margin)])];
+        return [
+          ["Produk", "Qty", "Omzet", "HPP", "Laba", "Margin"],
+          ...data.productProfitability.map((row) => [
+            row.name,
+            String(row.qty),
+            String(row.revenue),
+            String(row.cogs),
+            String(row.profit),
+            String(row.margin),
+          ]),
+        ];
       case "cash-flow":
-        return [["Arah", "Nilai"], ["Masuk", String(data.cashFlow.cashIn)], ["Keluar", String(data.cashFlow.cashOut)], ["Net", String(data.cashFlow.net)]];
+        return [
+          ["Arah", "Nilai"],
+          ["Masuk", String(data.cashFlow.cashIn)],
+          ["Keluar", String(data.cashFlow.cashOut)],
+          ["Net", String(data.cashFlow.net)],
+        ];
       default:
         return [];
     }
@@ -144,7 +201,9 @@ export class ReportsService {
 
   private toPdf(title: string, rows: string[][]) {
     const lines = [title, ...rows.map((row) => row.join(" | "))];
-    const escaped = lines.map((line) => line.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)")).join("\\n");
+    const escaped = lines
+      .map((line) => line.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)"))
+      .join("\\n");
     const stream = `BT /F1 11 Tf 48 750 Td (${escaped}) Tj ET`;
     return `%PDF-1.4
 1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj

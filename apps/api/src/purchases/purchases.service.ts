@@ -12,13 +12,21 @@ import { PrismaService } from "../prisma/prisma.service.js";
 export class PurchasesService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async list(currentUser: JwtPayload) {
-    const rows = await this.prisma.purchase.findMany({
-      where: { tenantId: currentUser.tid },
-      include: { supplier: true, items: true },
-      orderBy: { createdAt: "desc" },
-    });
-    return rows.map((row) => this.toPurchase(row));
+  async list(currentUser: JwtPayload, page: { limit?: number; offset?: number } = {}) {
+    const where = { tenantId: currentUser.tid };
+    const limit = page.limit ?? 50;
+    const offset = page.offset ?? 0;
+    const [total, rows] = await Promise.all([
+      this.prisma.purchase.count({ where }),
+      this.prisma.purchase.findMany({
+        where,
+        include: { supplier: true, items: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+    return { items: rows.map((row) => this.toPurchase(row)), total };
   }
 
   async get(currentUser: JwtPayload, id: string) {

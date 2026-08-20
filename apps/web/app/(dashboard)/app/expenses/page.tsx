@@ -31,13 +31,13 @@ export default function ExpensesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function load() {
-    const params = new URLSearchParams({ from, to });
+    const params = new URLSearchParams({ from, to, limit: "50", offset: "0" });
     const [nextCategories, nextRows] = await Promise.all([
       api<Category[]>("/expense-categories"),
-      api<Expense[]>(`/expenses?${params.toString()}`),
+      api<{ items: Expense[] }>(`/expenses?${params.toString()}`),
     ]);
     setCategories(nextCategories);
-    setRows(nextRows);
+    setRows(nextRows.items);
     setCategoryId((value) => value || nextCategories[0]?.id || "");
   }
 

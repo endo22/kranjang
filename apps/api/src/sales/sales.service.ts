@@ -86,7 +86,7 @@ export class SalesService {
     });
   }
 
-  async listSales(currentUser: JwtPayload, query: z.infer<typeof dateRangeQuerySchema> = {}) {
+  async listSales(currentUser: JwtPayload, query: z.infer<typeof dateRangeQuerySchema> & { limit?: number; offset?: number } = {}) {
     const soldAt =
       query.from || query.to
         ? {
@@ -94,17 +94,24 @@ export class SalesService {
             ...(query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
           }
         : undefined;
-    const rows = await this.prisma.sale.findMany({
-      where: {
-        tenantId: currentUser.tid,
-        ...(query.status ? { status: query.status } : {}),
-        ...(soldAt ? { soldAt } : {}),
-      },
-      include: { items: true, payments: true, customer: true },
-      orderBy: { soldAt: "desc" },
-      take: 100,
-    });
-    return rows.map((row) => this.toSale(row));
+    const where = {
+      tenantId: currentUser.tid,
+      ...(query.status ? { status: query.status } : {}),
+      ...(soldAt ? { soldAt } : {}),
+    };
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const [total, rows] = await Promise.all([
+      this.prisma.sale.count({ where }),
+      this.prisma.sale.findMany({
+        where,
+        include: { items: true, payments: true, customer: true },
+        orderBy: { soldAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+    return { items: rows.map((row) => this.toSale(row)), total };
   }
 
   async getSale(currentUser: JwtPayload, id: string) {

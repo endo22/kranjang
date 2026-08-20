@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
+import { api, downloadApi } from "@/lib/api";
 import { formatRp, todayIso } from "@/lib/format";
 
 type Summary = {
@@ -27,6 +27,15 @@ export default function ReportsPage() {
     void load().catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
   }, []);
 
+  async function exportReport(format: "csv" | "pdf") {
+    try {
+      await downloadApi(`/reports/profit-loss/export?from=${from}&to=${to}&format=${format}`, `profit-loss.${format}`);
+      toast.success(`Laporan ${format.toUpperCase()} diunduh.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mengunduh");
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -37,8 +46,11 @@ export default function ReportsPage() {
           <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           <Button onClick={() => void load()}>Terapkan</Button>
-          <Button variant="outline" asChild>
-            <a href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/reports/profit-loss/export?from=${from}&to=${to}&format=xlsx`}>Export Excel</a>
+          <Button variant="outline" onClick={() => void exportReport("csv")}>
+            Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => void exportReport("pdf")}>
+            Export PDF
           </Button>
         </div>
         {data ? (

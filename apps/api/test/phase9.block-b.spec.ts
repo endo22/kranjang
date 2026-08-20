@@ -78,7 +78,7 @@ describe("phase 9 block b", () => {
     const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
     const listed = await server.get(`/api/v1/sales?from=${today}&to=${today}`).set(auth);
     expect(listed.status).toBe(200);
-    expect(Array.isArray(listed.body)).toBe(true);
-    expect(listed.body.some((row: { id: string }) => row.id === sale.body.id)).toBe(true);
+    expect(Array.isArray(listed.body.items)).toBe(true);
+    expect(listed.body.items.some((row: { id: string }) => row.id === sale.body.id)).toBe(true);
   });
 });

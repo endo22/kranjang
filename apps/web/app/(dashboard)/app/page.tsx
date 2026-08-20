@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,8 +17,19 @@ type Dashboard = {
   netProfit: number;
   transactionCount: number;
   topProducts: Array<{ name: string; qty: number }>;
-  lowStock: Array<{ name: string; stock: number }>;
+  lowStock: Array<{ id: string; name: string; stock: number; minStock: number }>;
+  salesChangePct: number | null;
+  profitChangePct: number | null;
+  previous?: { from: string; to: string; revenue: number; netProfit: number };
 };
+
+function formatChange(pct: number | null) {
+  if (pct === null) {
+    return "vs periode lalu: n/a";
+  }
+  const sign = pct > 0 ? "+" : "";
+  return `vs periode lalu: ${sign}${pct}%`;
+}
 
 export default function DashboardPage() {
   const { session } = useAuth();
@@ -43,6 +55,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Omzet hari ini</CardTitle>
             <CardDescription>{data ? formatRp(data.revenue) : "…"}</CardDescription>
+            <p className="text-xs text-[#616161]">{data ? formatChange(data.salesChangePct) : null}</p>
           </CardHeader>
         </Card>
         <Card>
@@ -55,23 +68,40 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Laba bersih</CardTitle>
             <CardDescription>{data ? formatRp(data.netProfit) : "…"}</CardDescription>
+            <p className="text-xs text-[#616161]">{data ? formatChange(data.profitChangePct) : null}</p>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Trial</CardTitle>
-            <CardDescription>{trialDaysRemaining} hari · {session.tenant.subscriptionStatus}</CardDescription>
+            <CardDescription>
+              {trialDaysRemaining} hari · {session.tenant.subscriptionStatus}
+            </CardDescription>
           </CardHeader>
         </Card>
       </div>
       <Card>
         <CardHeader>
           <CardTitle>Stok menipis</CardTitle>
+          <CardDescription>
+            <Link href="/app/inventory" className="text-sm underline">
+              Kelola di inventori
+            </Link>
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {data?.lowStock.length ? data.lowStock.map((row) => (
-            <p key={row.name} className="text-sm">{row.name}: {row.stock}</p>
-          )) : <p className="text-sm text-[#616161]">Tidak ada peringatan stok.</p>}
+          {data?.lowStock.length ? (
+            data.lowStock.map((row) => (
+              <p key={row.id} className="text-sm">
+                <Link href={`/app/inventory?productId=${row.id}`} className="underline">
+                  {row.name}
+                </Link>
+                : {row.stock} (min {row.minStock})
+              </p>
+            ))
+          ) : (
+            <p className="text-sm text-[#616161]">Tidak ada peringatan stok.</p>
+          )}
         </CardContent>
       </Card>
     </div>

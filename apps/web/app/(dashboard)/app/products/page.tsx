@@ -31,7 +31,7 @@ function createEmptyRecipeDraft(): RecipeDraftItem {
   return { ingredientId: "", quantity: "1" };
 }
 
-function buildProductsPath(filters: ProductFilters) {
+function buildProductsPath(filters: ProductFilters, page = { limit: 50, offset: 0 }) {
   const params = new URLSearchParams();
   const q = filters.q.trim();
   if (q) {
@@ -43,9 +43,9 @@ function buildProductsPath(filters: ProductFilters) {
   if (filters.categoryId) {
     params.set("categoryId", filters.categoryId);
   }
-
-  const query = params.toString();
-  return query ? `/products?${query}` : "/products";
+  params.set("limit", String(page.limit));
+  params.set("offset", String(page.offset));
+  return `/products?${params.toString()}`;
 }
 
 export default function ProductsPage() {
@@ -58,16 +58,21 @@ export default function ProductsPage() {
   const [categoryName, setCategoryName] = useState("");
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<ProductFilters>({ q: "", productType: "", categoryId: "" });
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
 
-  async function load(nextFilters: ProductFilters = filters) {
-    const productsPath = buildProductsPath(nextFilters);
-    const [nextVisibleProducts, nextAllProducts, nextCategories] = await Promise.all([
-      api<Product[]>(productsPath),
-      productsPath === "/products" ? Promise.resolve<Product[] | null>(null) : api<Product[]>("/products"),
+  async function load(nextFilters: ProductFilters = filters, nextOffset = offset) {
+    const productsPath = buildProductsPath(nextFilters, { limit: pageSize, offset: nextOffset });
+    const [page, ingredientsPage, nextCategories] = await Promise.all([
+      api<{ items: Product[]; total: number }>(productsPath),
+      api<{ items: Product[] }>("/products?limit=100"),
       api<Category[]>("/categories"),
     ]);
-    setVisibleProducts(nextVisibleProducts);
-    setProducts(nextAllProducts ?? nextVisibleProducts);
+    setVisibleProducts(page.items);
+    setProducts(ingredientsPage.items);
+    setTotal(page.total);
+    setOffset(nextOffset);
     setCategories(nextCategories);
     setCategoryDrafts(Object.fromEntries(nextCategories.map((category) => [category.id, category.name])));
   }
@@ -405,7 +410,7 @@ export default function ProductsPage() {
               className="grid gap-3 md:grid-cols-[minmax(0,2fr)_180px_220px_auto_auto]"
               onSubmit={(event) => {
                 event.preventDefault();
-                void load(filters).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat produk."));
+                void load(filters, 0).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat produk."));
               }}
             >
               <div className="space-y-2">
@@ -457,13 +462,15 @@ export default function ProductsPage() {
                 onClick={() => {
                   const nextFilters = { q: "", productType: "", categoryId: "" };
                   setFilters(nextFilters);
-                  void load(nextFilters).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat produk."));
+                  void load(nextFilters, 0).catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat produk."));
                 }}
               >
                 Reset
               </Button>
             </form>
-            <p className="mt-3 text-sm text-[#616161]">Menampilkan {visibleProducts.length} produk.</p>
+            <p className="mt-3 text-sm text-[#616161]">
+              Menampilkan {visibleProducts.length} dari {total} produk.
+            </p>
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -534,6 +541,32 @@ export default function ProductsPage() {
               ) : null}
             </tbody>
           </table>
+          <div className="flex items-center justify-between gap-3 border-t border-[#f3f3f3] p-4">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={offset <= 0}
+              onClick={() =>
+                void load(filters, Math.max(0, offset - pageSize)).catch((error) =>
+                  toast.error(error instanceof Error ? error.message : "Gagal memuat produk."),
+                )
+              }
+            >
+              Sebelumnya
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={offset + pageSize >= total}
+              onClick={() =>
+                void load(filters, offset + pageSize).catch((error) =>
+                  toast.error(error instanceof Error ? error.message : "Gagal memuat produk."),
+                )
+              }
+            >
+              Berikutnya
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

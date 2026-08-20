@@ -49,8 +49,9 @@ describe("phase 9 block A", () => {
       .set(auth);
 
     expect(filtered.status).toBe(200);
-    expect(filtered.body).toHaveLength(1);
-    expect(filtered.body[0]).toMatchObject({
+    expect(filtered.body.items).toHaveLength(1);
+    expect(filtered.body.total).toBe(1);
+    expect(filtered.body.items[0]).toMatchObject({
       id: air.body.id,
       name: "Air Mineral",
       productType: "SIMPLE",
@@ -224,7 +225,7 @@ describe("phase 9 block A", () => {
       .set(auth);
 
     expect(filtered.status).toBe(200);
-    expect(filtered.body).toEqual(
+    expect(filtered.body.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           productId: kopi.body.id,
@@ -233,15 +234,15 @@ describe("phase 9 block A", () => {
         }),
       ]),
     );
-    expect(filtered.body.every((row: { productId: string }) => row.productId === kopi.body.id)).toBe(true);
+    expect(filtered.body.items.every((row: { productId: string }) => row.productId === kopi.body.id)).toBe(true);
 
     const futureOnly = await server.get(`/api/v1/inventory/movements?from=${future}`).set(auth);
     expect(futureOnly.status).toBe(200);
-    expect(futureOnly.body).toEqual([]);
+    expect(futureOnly.body.items).toEqual([]);
 
     const pastOnly = await server.get(`/api/v1/inventory/movements?to=${past}`).set(auth);
     expect(pastOnly.status).toBe(200);
-    expect(pastOnly.body).toEqual([]);
+    expect(pastOnly.body.items).toEqual([]);
 
     await app.close();
   }, 60000);

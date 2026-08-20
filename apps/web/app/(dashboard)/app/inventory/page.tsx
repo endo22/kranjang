@@ -41,12 +41,12 @@ export default function InventoryPage() {
 
   async function load(filters = { from: filterFrom, to: filterTo, productId: filterProductId }) {
     const [movements, nextProducts] = await Promise.all([
-      api<Movement[]>(buildInventoryMovementsPath(filters)),
-      api<Product[]>("/products"),
+      api<{ items: Movement[] }>(buildInventoryMovementsPath(filters)),
+      api<{ items: Product[] }>("/products?limit=100"),
     ]);
-    setRows(movements);
-    setProducts(nextProducts);
-    setProductId((current) => current || nextProducts[0]?.id || "");
+    setRows(movements.items);
+    setProducts(nextProducts.items);
+    setProductId((current) => current || nextProducts.items[0]?.id || "");
   }
 
   useEffect(() => {

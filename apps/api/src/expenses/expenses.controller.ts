@@ -5,6 +5,7 @@ import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
+import { parsePagination } from "../common/pagination.js";
 import { PermissionsGuard } from "../common/permissions.guard.js";
 import { RequirePermissions } from "../common/require-permissions.js";
 import { ZodPipe } from "../common/zod.pipe.js";
@@ -23,8 +24,14 @@ export class ExpensesController {
 
   @Get("expenses")
   @RequirePermissions("expense.view")
-  list(@CurrentUser() user: JwtPayload | undefined, @Query("from") from?: string, @Query("to") to?: string) {
-    return this.expensesService.list(this.require(user), { from, to });
+  list(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    return this.expensesService.list(this.require(user), { from, to, ...parsePagination(limit, offset) });
   }
 
   @Post("expenses")

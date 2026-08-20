@@ -5,6 +5,7 @@ import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
+import { parsePagination } from "../common/pagination.js";
 import { PermissionsGuard } from "../common/permissions.guard.js";
 import { RequirePermissions } from "../common/require-permissions.js";
 import { ZodPipe } from "../common/zod.pipe.js";
@@ -14,6 +15,8 @@ const inventoryMovementsQuerySchema = z.object({
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   productId: z.string().uuid().optional(),
+  limit: z.string().optional(),
+  offset: z.string().optional(),
 });
 
 @Controller("inventory")
@@ -25,7 +28,7 @@ export class InventoryController {
   @RequirePermissions("inventory.view")
   movements(
     @CurrentUser() user: JwtPayload | undefined,
-    @Query() query: { from?: string; to?: string; productId?: string },
+    @Query() query: { from?: string; to?: string; productId?: string; limit?: string; offset?: string },
   ) {
     const parsed = inventoryMovementsQuerySchema.safeParse(query);
     if (!parsed.success) {
@@ -33,7 +36,13 @@ export class InventoryController {
         issues: parsed.error.issues,
       });
     }
-    return this.inventoryService.movements(this.require(user), parsed.data);
+    const page = parsePagination(parsed.data.limit, parsed.data.offset);
+    return this.inventoryService.movements(this.require(user), {
+      from: parsed.data.from,
+      to: parsed.data.to,
+      productId: parsed.data.productId,
+      ...page,
+    });
   }
 
   @Post("adjust")

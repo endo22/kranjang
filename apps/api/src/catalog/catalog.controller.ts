@@ -5,6 +5,7 @@ import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
+import { parsePagination } from "../common/pagination.js";
 import { PermissionsGuard } from "../common/permissions.guard.js";
 import { RequirePermissions } from "../common/require-permissions.js";
 import { ZodPipe } from "../common/zod.pipe.js";
@@ -56,11 +57,15 @@ export class CatalogController {
     @Query("productType") productType?: string,
     @Query("type") legacyType?: string,
     @Query("search") legacySearch?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
   ) {
+    const page = parsePagination(limit, offset);
     return this.catalogService.listProducts(this.requireUser(currentUser), {
       q: q ?? legacySearch,
       categoryId,
       productType: productType ?? legacyType,
+      ...page,
     });
   }
 

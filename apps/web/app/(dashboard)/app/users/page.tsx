@@ -83,7 +83,7 @@ export default function UsersPage() {
 
     try {
       const [userRows, roleRows] = await Promise.all([
-        api<UserRecord[]>("/users"),
+        api<UserRecord[]>("/users?includeInactive=1"),
         api<RoleRecord[]>("/roles"),
       ]);
 
@@ -204,7 +204,7 @@ export default function UsersPage() {
 
       setUsers((current) => current.filter((user) => user.id !== deleteUser.id));
       setDeleteUser(null);
-      toast.success("User berhasil dihapus.");
+      toast.success("User berhasil dinonaktifkan.");
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -254,27 +254,50 @@ export default function UsersPage() {
                 <tbody>
                   {users.map((user) => (
                     <tr key={user.id} className="border-b border-[#f1f2f4] last:border-b-0">
-                      <td className="px-3 py-4 font-medium text-[#17171c]">{user.name}</td>
+                      <td className="px-3 py-4 font-medium text-[#17171c]">
+                        {user.name}
+                        {user.deletedAt ? <span className="ml-2 text-xs text-[#a32626]">(nonaktif)</span> : null}
+                      </td>
                       <td className="px-3 py-4 text-[#616161]">{user.email}</td>
                       <td className="px-3 py-4 text-[#616161]">{user.phone ?? "-"}</td>
                       <td className="px-3 py-4 text-[#616161]">{user.role.name}</td>
                       <td className="px-3 py-4 text-[#616161]">{formatDate(user.createdAt)}</td>
                       <td className="px-3 py-4">
                         <div className="flex justify-end gap-2">
-                          <Button type="button" variant="ghost" size="sm" className="gap-2" onClick={() => openEditDialog(user)}>
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="gap-2 text-[#a32626] hover:bg-[#fff5f5] hover:text-[#a32626]"
-                            onClick={() => setDeleteUser(user)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Hapus
-                          </Button>
+                          {!user.deletedAt ? (
+                            <>
+                              <Button type="button" variant="ghost" size="sm" className="gap-2" onClick={() => openEditDialog(user)}>
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-2 text-[#a32626] hover:bg-[#fff5f5] hover:text-[#a32626]"
+                                onClick={() => setDeleteUser(user)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Nonaktif
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                void api<UserRecord>(`/users/${user.id}/restore`, { method: "POST" })
+                                  .then(() => {
+                                    toast.success("User diaktifkan kembali.");
+                                    return loadData();
+                                  })
+                                  .catch((error) => toast.error(getErrorMessage(error)));
+                              }}
+                            >
+                              Aktifkan
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -444,9 +467,9 @@ export default function UsersPage() {
       <Dialog open={Boolean(deleteUser)} onOpenChange={(open) => (!open ? setDeleteUser(null) : undefined)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Hapus user</DialogTitle>
+            <DialogTitle>Nonaktifkan user</DialogTitle>
             <DialogDescription>
-              {deleteUser ? `User ${deleteUser.name} akan dihapus dari tenant ini. Tindakan ini tidak dapat dibatalkan.` : ""}
+              {deleteUser ? `User ${deleteUser.name} akan dinonaktifkan dan tidak bisa login. Anda bisa mengaktifkannya kembali nanti.` : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -454,7 +477,7 @@ export default function UsersPage() {
               Batal
             </Button>
             <Button type="button" disabled={isDeleting} onClick={handleDelete}>
-              {isDeleting ? "Menghapus..." : "Hapus user"}
+              {isDeleting ? "Menonaktifkan..." : "Nonaktifkan"}
             </Button>
           </DialogFooter>
         </DialogContent>

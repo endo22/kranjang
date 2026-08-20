@@ -55,6 +55,7 @@ export type UserRecord = {
     name: string;
   };
   createdAt: string;
+  deletedAt?: string | null;
 };
 
 export type SettingsRecord = {
@@ -126,7 +127,12 @@ async function parseResponse<T>(response: Response) {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  const text = await response.text();
+  if (!text) {
+    return null as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 async function refreshSession() {
@@ -206,4 +212,42 @@ export async function api<T>(path: string, init: RequestInit = {}, options: ApiO
   }
 
   return parseResponse<T>(response);
+}
+
+export async function downloadApi(path: string, fallbackFilename: string) {
+  const headers = new Headers();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  const response = await fetch(toUrl(path), {
+    headers,
+    credentials: "include",
+  });
+
+  if (response.status === 401) {
+    try {
+      const session = await refreshSession();
+      setAccessToken(session.accessToken);
+      return downloadApi(path, fallbackFilename);
+    } catch (error) {
+      expireSession();
+      throw error;
+    }
+  }
+
+  if (!response.ok) {
+    throw await createApiError(response);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const matched = /filename="([^"]+)"/.exec(disposition);
+  const filename = matched?.[1] ?? fallbackFilename;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

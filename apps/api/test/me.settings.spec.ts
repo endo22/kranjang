@@ -191,8 +191,8 @@ describe("me and settings", () => {
     const settings = await request(app.getHttpServer())
       .get("/api/v1/settings")
       .set(bearer(cashierLogin.body.accessToken));
-    expect(settings.status).toBe(403);
-    expect(settings.body.code).toBe("FORBIDDEN");
+    expect(settings.status).toBe(200);
+    expect(settings.body.taxPercent).toBeDefined();
 
     const patched = await request(app.getHttpServer())
       .patch("/api/v1/settings")
