@@ -39,6 +39,8 @@ model Tenant {
   suppliers          Supplier[]
   purchases          Purchase[]
   purchaseItems      PurchaseItem[]
+  purchaseReturns    PurchaseReturn[]
+  purchaseReturnItems PurchaseReturnItem[]
   customers          Customer[]
   cashierSessions    CashierSession[]
   sales              Sale[]
@@ -94,6 +96,7 @@ model User {
   salesAsCashier           Sale[]                    @relation("SaleCashier")
   salesCancelled           Sale[]                    @relation("SaleCancelledBy")
   purchasesCreated         Purchase[]                @relation("PurchaseCreatedBy")
+  purchaseReturnsCreated   PurchaseReturn[]          @relation("PurchaseReturnCreatedBy")
   expensesCreated          Expense[]                 @relation("ExpenseCreatedBy")
   stockMovementsCreated    StockMovement[]           @relation("StockMovementCreatedBy")
   auditLogs                AuditLog[]
@@ -159,6 +162,7 @@ model Outlet {
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   products  Product[]
   purchases Purchase[]
+  purchaseReturns PurchaseReturn[]
   sessions  CashierSession[]
   sales     Sale[]
   expenses  Expense[]
@@ -283,6 +287,7 @@ model Product {
   recipeAsMenu RecipeItem[]   @relation("RecipeMenu")
   recipeAsIngredient RecipeItem[] @relation("RecipeIngredient")
   purchaseItems PurchaseItem[]
+  purchaseReturnItems PurchaseReturnItem[]
   saleItems     SaleItem[]
   movements     StockMovement[]
 
@@ -362,6 +367,7 @@ model Purchase {
   supplier        Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   createdBy       User           @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   items           PurchaseItem[]
+  returns         PurchaseReturn[]
 
   @@unique([tenantId, invoiceNo])
   @@index([tenantId, purchasedAt(sort: Desc)])
@@ -369,18 +375,55 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  purchaseId String  @map("purchase_id") @db.Uuid
-  productId String   @map("product_id") @db.Uuid
-  quantity  Decimal  @db.Decimal(18, 4)
-  unitCost  Decimal  @map("unit_cost") @db.Decimal(19, 2)
-  lineTotal Decimal  @map("line_total") @db.Decimal(19, 2)
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  purchase  Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  purchaseId  String   @map("purchase_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  quantity    Decimal  @db.Decimal(18, 4)
+  receivedQty Decimal  @default(0) @map("received_qty") @db.Decimal(18, 4)
+  returnedQty Decimal  @default(0) @map("returned_qty") @db.Decimal(18, 4)
+  unitCost    Decimal  @map("unit_cost") @db.Decimal(19, 2)
+  lineTotal   Decimal  @map("line_total") @db.Decimal(19, 2)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  returnItems PurchaseReturnItem[]
 
   @@map("purchase_items")
+}
+
+model PurchaseReturn {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String               @map("tenant_id") @db.Uuid
+  outletId    String               @map("outlet_id") @db.Uuid
+  purchaseId  String               @map("purchase_id") @db.Uuid
+  notes       String?
+  createdById String               @map("created_by") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet      Outlet               @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  purchase    Purchase             @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  createdBy   User                 @relation("PurchaseReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items       PurchaseReturnItem[]
+
+  @@index([tenantId, purchaseId])
+  @@map("purchase_returns")
+}
+
+model PurchaseReturnItem {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  purchaseReturnId String         @map("purchase_return_id") @db.Uuid
+  purchaseItemId   String         @map("purchase_item_id") @db.Uuid
+  productId        String         @map("product_id") @db.Uuid
+  quantity         Decimal        @db.Decimal(18, 4)
+  unitCost         Decimal        @map("unit_cost") @db.Decimal(19, 2)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  purchaseItem     PurchaseItem   @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("purchase_return_items")
 }
 
 model Customer {

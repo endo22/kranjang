@@ -74,6 +74,33 @@ export const purchaseSchema = z.object({
     .min(1),
 });
 
+export const purchaseReceiveSchema = z.preprocess(
+  (value) => (value == null || value === "" ? {} : value),
+  z.object({
+    items: z
+      .array(
+        z.object({
+          purchaseItemId: z.string().uuid(),
+          quantity: z.number().positive(),
+        }),
+      )
+      .min(1)
+      .optional(),
+  }),
+);
+
+export const purchaseReturnSchema = z.object({
+  notes: optionalText,
+  items: z
+    .array(
+      z.object({
+        purchaseItemId: z.string().uuid(),
+        quantity: z.number().positive(),
+      }),
+    )
+    .min(1),
+});
+
 export const inventoryAdjustSchema = z
   .object({
     productId: z.string().uuid(),
@@ -173,4 +200,6 @@ export const adminPlanSchema = z.object({
 
 export type ProductBody = z.infer<typeof productSchema>;
 export type PurchaseBody = z.infer<typeof purchaseSchema>;
+export type PurchaseReceiveBody = z.infer<typeof purchaseReceiveSchema>;
+export type PurchaseReturnBody = z.infer<typeof purchaseReturnSchema>;
 export type SaleBody = z.infer<typeof saleSchema>;

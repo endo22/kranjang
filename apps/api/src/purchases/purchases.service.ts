@@ -1,12 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { purchaseSchema } from "@kranjang/shared";
+import type { purchaseReceiveSchema, purchaseReturnSchema, purchaseSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
-import { asNumber, roundMoney } from "../common/money.js";
+import { asNumber, roundMoney, roundQty } from "../common/money.js";
 import { assertWritableSubscription, requireTenantOutlet, writeAudit } from "../common/tenant-context.js";
 import { applyStockMovement } from "../inventory/inventory.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+
+type ReceiveBody = z.infer<typeof purchaseReceiveSchema>;
+type ReturnBody = z.infer<typeof purchaseReturnSchema>;
 
 @Injectable()
 export class PurchasesService {
@@ -66,6 +69,8 @@ export class PurchasesService {
             tenantId: currentUser.tid,
             productId: item.productId,
             quantity: item.quantity,
+            receivedQty: 0,
+            returnedQty: 0,
             unitCost: item.unitCost,
             lineTotal: roundMoney(item.quantity * item.unitCost),
           })),
@@ -86,7 +91,7 @@ export class PurchasesService {
     return this.toPurchase(purchase);
   }
 
-  async receive(currentUser: JwtPayload, id: string) {
+  async receive(currentUser: JwtPayload, id: string, body: ReceiveBody = {}) {
     const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
     assertWritableSubscription(tenant.subscriptionStatus);
 
@@ -99,34 +104,172 @@ export class PurchasesService {
         throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
       }
       if (purchase.documentStatus === "RECEIVED") {
-        throw new AppError("VALIDATION_ERROR", "Pembelian sudah diterima.", 400);
+        throw new AppError("VALIDATION_ERROR", "Pembelian sudah diterima penuh.", 400);
       }
       if (purchase.documentStatus === "CANCELLED") {
         throw new AppError("VALIDATION_ERROR", "Pembelian sudah dibatalkan.", 400);
       }
+      if (purchase.documentStatus !== "DRAFT" && purchase.documentStatus !== "PARTIAL") {
+        throw new AppError("VALIDATION_ERROR", "Status pembelian tidak bisa diterima.", 400);
+      }
 
-      for (const item of purchase.items) {
+      const requested =
+        body.items && body.items.length > 0
+          ? body.items
+          : purchase.items
+              .map((item) => {
+                const remaining = roundQty(asNumber(item.quantity) - asNumber(item.receivedQty));
+                return remaining > 0 ? { purchaseItemId: item.id, quantity: remaining } : null;
+              })
+              .filter((row): row is { purchaseItemId: string; quantity: number } => row !== null);
+
+      if (requested.length === 0) {
+        throw new AppError("VALIDATION_ERROR", "Tidak ada qty tersisa untuk diterima.", 400);
+      }
+
+      const byId = new Map(purchase.items.map((item) => [item.id, item]));
+      for (const line of requested) {
+        const item = byId.get(line.purchaseItemId);
+        if (!item || item.purchaseId !== purchase.id) {
+          throw new AppError("VALIDATION_ERROR", "Baris pembelian tidak valid.", 400);
+        }
+        const remaining = roundQty(asNumber(item.quantity) - asNumber(item.receivedQty));
+        if (line.quantity > remaining + 0.00001) {
+          throw new AppError(
+            "VALIDATION_ERROR",
+            `Qty terima melebihi sisa (${remaining}) untuk salah satu baris.`,
+            400,
+          );
+        }
+
         await applyStockMovement(tx, {
           tenantId: currentUser.tid,
           outletId: outlet.id,
           productId: item.productId,
-          qtyDelta: asNumber(item.quantity),
+          qtyDelta: line.quantity,
           movementType: "PURCHASE",
           referenceType: "PURCHASE",
           referenceId: purchase.id,
           unitCost: asNumber(item.unitCost),
           userId: currentUser.sub,
           allowNegative: tenant.allowNegativeStock,
-          updateAvgCost: { qtyAdded: asNumber(item.quantity), unitCost: asNumber(item.unitCost) },
+          updateAvgCost: { qtyAdded: line.quantity, unitCost: asNumber(item.unitCost) },
+        });
+
+        await tx.purchaseItem.update({
+          where: { id: item.id },
+          data: { receivedQty: roundQty(asNumber(item.receivedQty) + line.quantity) },
         });
       }
 
+      const freshItems = await tx.purchaseItem.findMany({ where: { purchaseId: purchase.id } });
+      const fullyReceived = freshItems.every(
+        (item) => asNumber(item.receivedQty) + 0.00001 >= asNumber(item.quantity),
+      );
       const updated = await tx.purchase.update({
         where: { id: purchase.id },
-        data: { documentStatus: "RECEIVED", receivedAt: new Date() },
+        data: {
+          documentStatus: fullyReceived ? "RECEIVED" : "PARTIAL",
+          receivedAt: purchase.receivedAt ?? new Date(),
+        },
         include: { supplier: true, items: true },
       });
       return this.toPurchase(updated);
+    });
+  }
+
+  async createReturn(currentUser: JwtPayload, id: string, body: ReturnBody) {
+    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+    assertWritableSubscription(tenant.subscriptionStatus);
+
+    return this.prisma.$transaction(async (tx) => {
+      const purchase = await tx.purchase.findFirst({
+        where: { id, tenantId: currentUser.tid },
+        include: { items: true },
+      });
+      if (!purchase) {
+        throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
+      }
+      if (purchase.documentStatus !== "PARTIAL" && purchase.documentStatus !== "RECEIVED") {
+        throw new AppError("VALIDATION_ERROR", "Retur hanya untuk pembelian yang sudah diterima (parsial/penuh).", 400);
+      }
+
+      const byId = new Map(purchase.items.map((item) => [item.id, item]));
+      for (const line of body.items) {
+        const item = byId.get(line.purchaseItemId);
+        if (!item) {
+          throw new AppError("VALIDATION_ERROR", "Baris pembelian tidak valid.", 400);
+        }
+        const returnable = roundQty(asNumber(item.receivedQty) - asNumber(item.returnedQty));
+        if (line.quantity > returnable + 0.00001) {
+          throw new AppError(
+            "VALIDATION_ERROR",
+            `Qty retur melebihi yang bisa dikembalikan (${returnable}).`,
+            400,
+          );
+        }
+      }
+
+      const purchaseReturn = await tx.purchaseReturn.create({
+        data: {
+          tenantId: currentUser.tid,
+          outletId: outlet.id,
+          purchaseId: purchase.id,
+          notes: body.notes,
+          createdById: currentUser.sub,
+          items: {
+            create: body.items.map((line) => {
+              const item = byId.get(line.purchaseItemId)!;
+              return {
+                tenantId: currentUser.tid,
+                purchaseItemId: item.id,
+                productId: item.productId,
+                quantity: line.quantity,
+                unitCost: item.unitCost,
+              };
+            }),
+          },
+        },
+      });
+
+      for (const line of body.items) {
+        const item = byId.get(line.purchaseItemId)!;
+        await applyStockMovement(tx, {
+          tenantId: currentUser.tid,
+          outletId: outlet.id,
+          productId: item.productId,
+          qtyDelta: -line.quantity,
+          movementType: "PURCHASE_RETURN",
+          referenceType: "PURCHASE_RETURN",
+          referenceId: purchaseReturn.id,
+          unitCost: asNumber(item.unitCost),
+          notes: body.notes,
+          userId: currentUser.sub,
+          allowNegative: tenant.allowNegativeStock,
+        });
+        await tx.purchaseItem.update({
+          where: { id: item.id },
+          data: { returnedQty: roundQty(asNumber(item.returnedQty) + line.quantity) },
+        });
+      }
+
+      await writeAudit(tx, {
+        tenantId: currentUser.tid,
+        userId: currentUser.sub,
+        action: "CREATE",
+        module: "purchase",
+        entity: "purchase_return",
+        entityId: purchaseReturn.id,
+      });
+
+      const updated = await tx.purchase.findFirstOrThrow({
+        where: { id: purchase.id },
+        include: { supplier: true, items: true },
+      });
+      return {
+        purchase: this.toPurchase(updated),
+        returnId: purchaseReturn.id,
+      };
     });
   }
 
@@ -167,7 +310,16 @@ export class PurchasesService {
     documentStatus: string;
     paymentStatus: string;
     supplier?: { id: string; name: string } | null;
-    items: Array<{ productId: string; quantity: unknown; unitCost: unknown; lineTotal: unknown }>;
+    items: Array<{
+      id: string;
+      productId: string;
+      quantity: unknown;
+      receivedQty?: unknown;
+      returnedQty?: unknown;
+      unitCost: unknown;
+      lineTotal: unknown;
+      product?: { name: string } | null;
+    }>;
   }) {
     return {
       id: row.id,
@@ -177,12 +329,23 @@ export class PurchasesService {
       documentStatus: row.documentStatus,
       paymentStatus: row.paymentStatus,
       supplier: row.supplier,
-      items: row.items.map((item) => ({
-        productId: item.productId,
-        quantity: asNumber(item.quantity),
-        unitCost: asNumber(item.unitCost),
-        lineTotal: asNumber(item.lineTotal),
-      })),
+      items: row.items.map((item) => {
+        const quantity = asNumber(item.quantity);
+        const receivedQty = asNumber(item.receivedQty ?? 0);
+        const returnedQty = asNumber(item.returnedQty ?? 0);
+        return {
+          id: item.id,
+          productId: item.productId,
+          productName: item.product?.name,
+          quantity,
+          receivedQty,
+          returnedQty,
+          remainingReceive: roundQty(Math.max(0, quantity - receivedQty)),
+          remainingReturn: roundQty(Math.max(0, receivedQty - returnedQty)),
+          unitCost: asNumber(item.unitCost),
+          lineTotal: asNumber(item.lineTotal),
+        };
+      }),
     };
   }
 }

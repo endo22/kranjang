@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
-import { purchaseSchema } from "@kranjang/shared";
+import { purchaseReceiveSchema, purchaseReturnSchema, purchaseSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
@@ -41,8 +41,23 @@ export class PurchasesController {
 
   @Post(":id/receive")
   @RequirePermissions("purchase.receive")
-  receive(@CurrentUser() user: JwtPayload | undefined, @Param("id") id: string) {
-    return this.purchasesService.receive(this.require(user), id);
+  receive(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Param("id") id: string,
+    @Body(new ZodPipe(purchaseReceiveSchema)) body: z.infer<typeof purchaseReceiveSchema>,
+  ) {
+    return this.purchasesService.receive(this.require(user), id, body);
+  }
+
+  @Post(":id/returns")
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions("purchase.receive")
+  createReturn(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Param("id") id: string,
+    @Body(new ZodPipe(purchaseReturnSchema)) body: z.infer<typeof purchaseReturnSchema>,
+  ) {
+    return this.purchasesService.createReturn(this.require(user), id, body);
   }
 
   @Post(":id/cancel")
