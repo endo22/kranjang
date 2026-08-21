@@ -1,0 +1,748 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String    @db.VarChar(120)
+  slug               String    @unique @db.VarChar(80)
+  phone              String?   @db.VarChar(20)
+  email              String?   @db.VarChar(255)
+  trialStartDate     DateTime  @map("trial_start_date") @db.Timestamptz
+  trialEndDate       DateTime  @map("trial_end_date") @db.Timestamptz
+  subscriptionStatus String    @map("subscription_status") @db.VarChar(20)
+  subscriptionPlanId String?   @map("subscription_plan_id") @db.Uuid
+  paymentStatus      String    @map("payment_status") @db.VarChar(20)
+  allowNegativeStock Boolean   @default(false) @map("allow_negative_stock")
+  timezone           String    @default("Asia/Jakarta") @db.VarChar(40)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: Restrict)
+  settings           TenantSettings?
+  users              User[]
+  roles              Role[]
+  outlets            Outlet[]
+  subscriptions      Subscription[]
+  payments           Payment[]
+  categories         Category[]
+  products           Product[]
+  productImages      ProductImage[]
+  recipeItems        RecipeItem[]
+  suppliers          Supplier[]
+  purchases          Purchase[]
+  purchaseItems      PurchaseItem[]
+  purchaseReturns    PurchaseReturn[]
+  purchaseReturnItems PurchaseReturnItem[]
+  outletStocks       OutletStock[]
+  customers          Customer[]
+  cashierSessions    CashierSession[]
+  sales              Sale[]
+  saleItems          SaleItem[]
+  salePayments       SalePayment[]
+  diningTables       DiningTable[]
+  saleHolds          SaleHold[]
+  saleHoldItems      SaleHoldItem[]
+  expenseCategories  ExpenseCategory[]
+  expenses           Expense[]
+  stockMovements     StockMovement[]
+  auditLogs          AuditLog[]
+
+  @@index([subscriptionStatus])
+  @@index([trialEndDate])
+  @@map("tenants")
+}
+
+model TenantSettings {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String    @unique @map("tenant_id") @db.Uuid
+  taxPercent           Decimal   @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  taxInclusive         Boolean   @default(true) @map("tax_inclusive")
+  receiptFooter        String?   @map("receipt_footer")
+  receiptLogoUrl       String?   @map("receipt_logo_url") @db.VarChar(255)
+  receiptQrPayload     String?   @map("receipt_qr_payload") @db.VarChar(255)
+  lastLowStockAlertAt  DateTime? @map("last_low_stock_alert_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@map("tenant_settings")
+}
+
+model User {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String?   @map("tenant_id") @db.Uuid
+  name            String    @db.VarChar(120)
+  email           String    @unique @db.VarChar(255)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  phone           String?   @db.VarChar(20)
+  isSuperAdmin    Boolean   @default(false) @map("is_super_admin")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant                   Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userRoles                UserRole[]
+  refreshTokens            RefreshToken[]
+  emailVerificationTokens  EmailVerificationToken[]
+  passwordResetTokens      PasswordResetToken[]
+  sessionsOpened           CashierSession[]          @relation("SessionOpenedBy")
+  sessionsClosed           CashierSession[]          @relation("SessionClosedBy")
+  salesAsCashier           Sale[]                    @relation("SaleCashier")
+  salesCancelled           Sale[]                    @relation("SaleCancelledBy")
+  saleHoldsAsCashier       SaleHold[]                @relation("SaleHoldCashier")
+  purchasesCreated         Purchase[]                @relation("PurchaseCreatedBy")
+  purchaseReturnsCreated   PurchaseReturn[]          @relation("PurchaseReturnCreatedBy")
+  expensesCreated          Expense[]                 @relation("ExpenseCreatedBy")
+  stockMovementsCreated    StockMovement[]           @relation("StockMovementCreatedBy")
+  auditLogs                AuditLog[]
+
+  @@index([tenantId, email])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String?  @map("tenant_id") @db.Uuid
+  name        String   @db.VarChar(50)
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@unique([tenantId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String           @unique @db.VarChar(80)
+  module      String           @db.VarChar(40)
+  description String           @db.VarChar(255)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model Outlet {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String    @db.VarChar(120)
+  address   String?
+  isDefault Boolean   @default(false) @map("is_default")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products  Product[]
+  purchases Purchase[]
+  purchaseReturns PurchaseReturn[]
+  sessions  CashierSession[]
+  sales     Sale[]
+  expenses  Expense[]
+  movements StockMovement[]
+  outletStocks OutletStock[]
+  diningTables DiningTable[]
+  saleHolds SaleHold[]
+
+  @@unique([tenantId, name])
+  @@map("outlets")
+}
+
+model OutletStock {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  outletId  String   @map("outlet_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  stock     Decimal  @default(0) @db.Decimal(18, 4)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet    Outlet   @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, outletId, productId])
+  @@index([tenantId, productId])
+  @@map("outlet_stocks")
+}
+
+model SubscriptionPlan {
+  id                      String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                    String         @unique @db.VarChar(40)
+  name                    String         @db.VarChar(80)
+  priceMonthly            Decimal        @map("price_monthly") @db.Decimal(19, 2)
+  priceYearly             Decimal?       @map("price_yearly") @db.Decimal(19, 2)
+  durationDays            Int            @map("duration_days")
+  maxUsers                Int?           @map("max_users")
+  maxProducts             Int?           @map("max_products")
+  maxTransactionsMonthly  Int?           @map("max_transactions_monthly")
+  maxOutlets              Int            @map("max_outlets")
+  maxStorageMb            Int?           @map("max_storage_mb")
+  featureReports          Boolean        @map("feature_reports")
+  featureInventory        Boolean        @map("feature_inventory")
+  featureMultiOutlet      Boolean        @map("feature_multi_outlet")
+  featureExport           Boolean        @map("feature_export")
+  isActive                Boolean        @default(true) @map("is_active")
+  createdAt               DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  tenants                 Tenant[]
+  subscriptions           Subscription[]
+  pendingSubscriptions    Subscription[] @relation("PendingPlan")
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String            @map("tenant_id") @db.Uuid
+  planId             String            @map("plan_id") @db.Uuid
+  status             String            @db.VarChar(20)
+  billingCycle       String            @map("billing_cycle") @db.VarChar(20)
+  currentPeriodStart DateTime          @map("current_period_start") @db.Timestamptz
+  currentPeriodEnd   DateTime          @map("current_period_end") @db.Timestamptz
+  gracePeriodEnd     DateTime?         @map("grace_period_end") @db.Timestamptz
+  cancelAtPeriodEnd  Boolean           @default(false) @map("cancel_at_period_end")
+  pendingPlanId      String?           @map("pending_plan_id") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  plan               SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Restrict)
+  pendingPlan        SubscriptionPlan? @relation("PendingPlan", fields: [pendingPlanId], references: [id], onDelete: Restrict)
+  payments           Payment[]
+
+  @@index([tenantId, status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  subscriptionId String       @map("subscription_id") @db.Uuid
+  orderId        String       @unique @map("order_id") @db.VarChar(64)
+  transactionId  String?      @map("transaction_id") @db.VarChar(64)
+  amount         Decimal      @db.Decimal(19, 2)
+  paymentMethod  String?      @map("payment_method") @db.VarChar(40)
+  status         String       @db.VarChar(20)
+  paidAt         DateTime?    @map("paid_at") @db.Timestamptz
+  expiredAt      DateTime?    @map("expired_at") @db.Timestamptz
+  rawResponse    Json?        @map("raw_response")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("payments")
+}
+
+model Category {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String    @db.VarChar(80)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products  Product[]
+
+  @@unique([tenantId, name])
+  @@map("categories")
+}
+
+model Product {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  outletId     String    @map("outlet_id") @db.Uuid
+  categoryId   String?   @map("category_id") @db.Uuid
+  supplierId   String?   @map("supplier_id") @db.Uuid
+  sku          String?   @db.VarChar(40)
+  barcode      String?   @db.VarChar(64)
+  name         String    @db.VarChar(160)
+  unit         String    @db.VarChar(20)
+  productType  String    @map("product_type") @db.VarChar(20)
+  buyPrice     Decimal   @map("buy_price") @db.Decimal(19, 2)
+  sellPrice    Decimal   @map("sell_price") @db.Decimal(19, 2)
+  avgCost      Decimal   @default(0) @map("avg_cost") @db.Decimal(19, 4)
+  stock        Decimal   @default(0) @db.Decimal(18, 4)
+  minStock     Decimal   @default(0) @map("min_stock") @db.Decimal(18, 4)
+  targetMargin Decimal?  @map("target_margin") @db.Decimal(5, 2)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet       Outlet    @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  supplier     Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  images       ProductImage[]
+  recipeAsMenu RecipeItem[]   @relation("RecipeMenu")
+  recipeAsIngredient RecipeItem[] @relation("RecipeIngredient")
+  purchaseItems PurchaseItem[]
+  purchaseReturnItems PurchaseReturnItem[]
+  saleItems     SaleItem[]
+  saleHoldItems SaleHoldItem[]
+  movements     StockMovement[]
+  outletStocks  OutletStock[]
+
+  @@unique([tenantId, sku])
+  @@unique([tenantId, barcode])
+  @@index([tenantId, name])
+  @@index([tenantId, productType, isActive])
+  @@index([tenantId, barcode])
+  @@map("products")
+}
+
+model ProductImage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  storagePath String   @map("storage_path") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("product_images")
+}
+
+model RecipeItem {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  ingredientId String   @map("ingredient_id") @db.Uuid
+  quantity     Decimal  @db.Decimal(18, 4)
+  unit         String   @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product      Product  @relation("RecipeMenu", fields: [productId], references: [id], onDelete: Restrict)
+  ingredient   Product  @relation("RecipeIngredient", fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, ingredientId])
+  @@map("recipe_items")
+}
+
+model Supplier {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String    @db.VarChar(120)
+  phone     String?   @db.VarChar(20)
+  address   String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products  Product[]
+  purchases Purchase[]
+
+  @@unique([tenantId, name])
+  @@map("suppliers")
+}
+
+model Purchase {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  outletId        String         @map("outlet_id") @db.Uuid
+  supplierId      String         @map("supplier_id") @db.Uuid
+  invoiceNo       String         @map("invoice_no") @db.VarChar(60)
+  purchasedAt     DateTime       @map("purchased_at") @db.Date
+  discountAmount  Decimal        @default(0) @map("discount_amount") @db.Decimal(19, 2)
+  taxAmount       Decimal        @default(0) @map("tax_amount") @db.Decimal(19, 2)
+  totalAmount     Decimal        @map("total_amount") @db.Decimal(19, 2)
+  documentStatus  String         @map("document_status") @db.VarChar(20)
+  paymentStatus   String         @map("payment_status") @db.VarChar(20)
+  notes           String?
+  createdById     String         @map("created_by") @db.Uuid
+  receivedAt      DateTime?      @map("received_at") @db.Timestamptz
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet          Outlet         @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  supplier        Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy       User           @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items           PurchaseItem[]
+  returns         PurchaseReturn[]
+
+  @@unique([tenantId, invoiceNo])
+  @@index([tenantId, purchasedAt(sort: Desc)])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  purchaseId  String   @map("purchase_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  quantity    Decimal  @db.Decimal(18, 4)
+  receivedQty Decimal  @default(0) @map("received_qty") @db.Decimal(18, 4)
+  returnedQty Decimal  @default(0) @map("returned_qty") @db.Decimal(18, 4)
+  unitCost    Decimal  @map("unit_cost") @db.Decimal(19, 2)
+  lineTotal   Decimal  @map("line_total") @db.Decimal(19, 2)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  returnItems PurchaseReturnItem[]
+
+  @@map("purchase_items")
+}
+
+model PurchaseReturn {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String               @map("tenant_id") @db.Uuid
+  outletId    String               @map("outlet_id") @db.Uuid
+  purchaseId  String               @map("purchase_id") @db.Uuid
+  notes       String?
+  createdById String               @map("created_by") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet      Outlet               @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  purchase    Purchase             @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  createdBy   User                 @relation("PurchaseReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items       PurchaseReturnItem[]
+
+  @@index([tenantId, purchaseId])
+  @@map("purchase_returns")
+}
+
+model PurchaseReturnItem {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  purchaseReturnId String         @map("purchase_return_id") @db.Uuid
+  purchaseItemId   String         @map("purchase_item_id") @db.Uuid
+  productId        String         @map("product_id") @db.Uuid
+  quantity         Decimal        @db.Decimal(18, 4)
+  unitCost         Decimal        @map("unit_cost") @db.Decimal(19, 2)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  purchaseItem     PurchaseItem   @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("purchase_return_items")
+}
+
+model Customer {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String    @db.VarChar(120)
+  phone     String?   @db.VarChar(20)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sales     Sale[]
+  saleHolds SaleHold[]
+
+  @@index([tenantId, name])
+  @@index([tenantId, phone])
+  @@map("customers")
+}
+
+model CashierSession {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  outletId    String    @map("outlet_id") @db.Uuid
+  openedById  String    @map("opened_by") @db.Uuid
+  closedById  String?   @map("closed_by") @db.Uuid
+  openingCash Decimal   @default(0) @map("opening_cash") @db.Decimal(19, 2)
+  closingCash Decimal?  @map("closing_cash") @db.Decimal(19, 2)
+  openedAt    DateTime  @map("opened_at") @db.Timestamptz
+  closedAt    DateTime? @map("closed_at") @db.Timestamptz
+  status      String    @db.VarChar(20)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet      Outlet    @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  openedBy    User      @relation("SessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy    User?     @relation("SessionClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  sales       Sale[]
+  saleHolds   SaleHold[]
+
+  @@map("cashier_sessions")
+}
+
+model Sale {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String          @map("tenant_id") @db.Uuid
+  outletId         String          @map("outlet_id") @db.Uuid
+  cashierSessionId String          @map("cashier_session_id") @db.Uuid
+  cashierId        String          @map("cashier_id") @db.Uuid
+  customerId       String?         @map("customer_id") @db.Uuid
+  diningTableId    String?         @map("dining_table_id") @db.Uuid
+  saleHoldId       String?         @map("sale_hold_id") @db.Uuid
+  receiptNo        String          @map("receipt_no") @db.VarChar(40)
+  soldAt           DateTime        @map("sold_at") @db.Timestamptz
+  subtotal         Decimal         @db.Decimal(19, 2)
+  discountAmount   Decimal         @map("discount_amount") @db.Decimal(19, 2)
+  taxAmount        Decimal         @map("tax_amount") @db.Decimal(19, 2)
+  totalNet         Decimal         @map("total_net") @db.Decimal(19, 2)
+  status           String          @db.VarChar(20)
+  cancelledAt      DateTime?       @map("cancelled_at") @db.Timestamptz
+  cancelledById    String?         @map("cancelled_by") @db.Uuid
+  notes            String?
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet           Outlet          @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  cashierSession   CashierSession  @relation(fields: [cashierSessionId], references: [id], onDelete: Restrict)
+  cashier          User            @relation("SaleCashier", fields: [cashierId], references: [id], onDelete: Restrict)
+  cancelledBy      User?           @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  diningTable      DiningTable?    @relation(fields: [diningTableId], references: [id], onDelete: Restrict)
+  saleHold         SaleHold?       @relation(fields: [saleHoldId], references: [id], onDelete: Restrict)
+  items            SaleItem[]
+  payments         SalePayment[]
+
+  @@unique([tenantId, receiptNo])
+  @@unique([saleHoldId])
+  @@index([tenantId, soldAt(sort: Desc)])
+  @@index([tenantId, status, soldAt])
+  @@map("sales")
+}
+
+model SaleItem {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  saleId              String   @map("sale_id") @db.Uuid
+  productId           String   @map("product_id") @db.Uuid
+  productNameSnapshot String   @map("product_name_snapshot") @db.VarChar(160)
+  quantity            Decimal  @db.Decimal(18, 4)
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(19, 2)
+  discountAmount      Decimal  @map("discount_amount") @db.Decimal(19, 2)
+  lineTotal           Decimal  @map("line_total") @db.Decimal(19, 2)
+  cogsAmount          Decimal  @map("cogs_amount") @db.Decimal(19, 2)
+  recipeSnapshot      Json?    @map("recipe_snapshot")
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  saleId    String   @map("sale_id") @db.Uuid
+  method    String   @db.VarChar(20)
+  amount    Decimal  @db.Decimal(19, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@map("sale_payments")
+}
+
+model DiningTable {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String     @map("tenant_id") @db.Uuid
+  outletId  String     @map("outlet_id") @db.Uuid
+  name      String     @db.VarChar(80)
+  sortOrder Int        @default(0) @map("sort_order")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime?  @map("deleted_at") @db.Timestamptz
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet    Outlet     @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  holds     SaleHold[]
+  sales     Sale[]
+
+  @@unique([tenantId, outletId, name])
+  @@index([tenantId, outletId, isActive])
+  @@map("dining_tables")
+}
+
+model SaleHold {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  outletId         String         @map("outlet_id") @db.Uuid
+  diningTableId    String?        @map("dining_table_id") @db.Uuid
+  cashierSessionId String?        @map("cashier_session_id") @db.Uuid
+  cashierId        String         @map("cashier_id") @db.Uuid
+  customerId       String?        @map("customer_id") @db.Uuid
+  status           String         @db.VarChar(20)
+  discountAmount   Decimal        @default(0) @map("discount_amount") @db.Decimal(19, 2)
+  notes            String?
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet           Outlet         @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  diningTable      DiningTable?   @relation(fields: [diningTableId], references: [id], onDelete: Restrict)
+  cashierSession   CashierSession? @relation(fields: [cashierSessionId], references: [id], onDelete: Restrict)
+  cashier          User           @relation("SaleHoldCashier", fields: [cashierId], references: [id], onDelete: Restrict)
+  customer         Customer?      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items            SaleHoldItem[]
+  sale             Sale?
+
+  @@index([tenantId, outletId, status])
+  @@index([tenantId, diningTableId, status])
+  @@map("sale_holds")
+}
+
+model SaleHoldItem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  holdId    String   @map("hold_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  quantity  Decimal  @db.Decimal(18, 4)
+  unitPrice Decimal  @map("unit_price") @db.Decimal(19, 2)
+  discountAmount Decimal @default(0) @map("discount_amount") @db.Decimal(19, 2)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  hold      SaleHold @relation(fields: [holdId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("sale_hold_items")
+}
+
+model ExpenseCategory {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String    @db.VarChar(80)
+  isSystem  Boolean   @default(false) @map("is_system")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  expenses  Expense[]
+
+  @@unique([tenantId, name])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  outletId       String          @map("outlet_id") @db.Uuid
+  categoryId     String          @map("category_id") @db.Uuid
+  description    String          @db.VarChar(255)
+  amount         Decimal         @db.Decimal(19, 2)
+  expenseDate    DateTime        @map("expense_date") @db.Date
+  paymentMethod  String          @map("payment_method") @db.VarChar(20)
+  attachmentPath String?         @map("attachment_path") @db.VarChar(255)
+  createdById    String          @map("created_by") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet         Outlet          @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  category       ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy      User            @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, expenseDate(sort: Desc)])
+  @@map("expenses")
+}
+
+model StockMovement {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  outletId      String   @map("outlet_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  movementType  String   @map("movement_type") @db.VarChar(30)
+  quantity      Decimal  @db.Decimal(18, 4)
+  stockBefore   Decimal  @map("stock_before") @db.Decimal(18, 4)
+  stockAfter    Decimal  @map("stock_after") @db.Decimal(18, 4)
+  unitCost      Decimal? @map("unit_cost") @db.Decimal(19, 4)
+  referenceType String?  @map("reference_type") @db.VarChar(30)
+  referenceId   String?  @map("reference_id") @db.Uuid
+  notes         String?
+  createdById   String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet        Outlet   @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  createdBy     User     @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, productId, createdAt(sort: Desc)])
+  @@index([tenantId, referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+model AuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String?  @map("tenant_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String   @db.VarChar(40)
+  module    String   @db.VarChar(40)
+  entity    String   @db.VarChar(40)
+  entityId  String?  @map("entity_id") @db.Uuid
+  oldValue  Json?    @map("old_value")
+  newValue  Json?    @map("new_value")
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  userAgent String?  @map("user_agent") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, entity, entityId])
+  @@map("audit_logs")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tokenHash])
+  @@map("email_verification_tokens")
+}
+
+model RefreshToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @map("token_hash") @db.VarChar(255)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  replacedBy String?   @map("replaced_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  user       User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tokenHash])
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
+}

@@ -1,0 +1,16 @@
+{
+  "name": "kranjang",
+  "private": true,
+  "packageManager": "pnpm@10.6.5",
+  "scripts": {
+    "dev": "pnpm --filter @kranjang/api --filter @kranjang/web --parallel dev",
+    "test": "pnpm --filter @kranjang/shared test && pnpm --filter @kranjang/api test",
+    "db:generate": "pnpm --filter @kranjang/db generate",
+    "db:migrate": "pnpm --filter @kranjang/db migrate",
+    "db:seed": "pnpm --filter @kranjang/db seed",
+    "db:cleanup-test": "pnpm --filter @kranjang/db cleanup:test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
