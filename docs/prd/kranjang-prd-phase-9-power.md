@@ -402,6 +402,8 @@ Tiap area: persona, perilaku, acceptance, dampak teknis, out-of-scope lokal.
 
 **Wave 3 (eksekusi):** [docs/superpowers/plans/2026-08-20-kranjang-next-wave-3.md](../superpowers/plans/2026-08-20-kranjang-next-wave-3.md) — Phase 8 production gate (mock-pay off, Midtrans Snap, Sentry, SA harden).
 
+**Path to Perfect (Jalur B):** [docs/superpowers/plans/2026-08-21-kranjang-path-perfect.md](../superpowers/plans/2026-08-21-kranjang-path-perfect.md) — Wave 4 seed-demo + cron alert; Wave 5–10 Later §5.3.
+
 ### Later / tetap di luar (PRD v1.1 §5.3)
 
 - Multi-outlet UI + transfer stok
@@ -528,6 +530,7 @@ Overflow masuk lampiran **Next**, bukan diam-diam menambah §5.3.
 - [x] Next Wave 1 plan: [docs/superpowers/plans/2026-08-20-kranjang-next-wave-1.md](../superpowers/plans/2026-08-20-kranjang-next-wave-1.md)
 - [x] Next Wave 2 plan: [docs/superpowers/plans/2026-08-20-kranjang-next-wave-2.md](../superpowers/plans/2026-08-20-kranjang-next-wave-2.md)
 - [x] Next Wave 3 plan: [docs/superpowers/plans/2026-08-20-kranjang-next-wave-3.md](../superpowers/plans/2026-08-20-kranjang-next-wave-3.md)
+- [x] Path to Perfect (Jalur B) Wave 4+: [docs/superpowers/plans/2026-08-21-kranjang-path-perfect.md](../superpowers/plans/2026-08-21-kranjang-path-perfect.md)
 - [x] Update pointer roadmap di [kranjang-prd.md](./kranjang-prd.md) §18.
 
 ---

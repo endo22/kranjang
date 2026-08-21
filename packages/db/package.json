@@ -8,6 +8,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "seed": "prisma db seed",
+    "seed:demo": "tsx prisma/seed-demo.ts",
     "cleanup:test": "tsx prisma/cleanup-test-data.ts",
     "test": "node --import tsx --test src/seed-plans.test.ts"
   },

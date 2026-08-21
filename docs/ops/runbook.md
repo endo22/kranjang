@@ -10,6 +10,8 @@
   - Checkout: API memanggil Snap create transaction
   - Webhook: `POST /api/v1/billing/webhook` (URL publik Nest, bukan Vercel)
 - Observability: `SENTRY_DSN` (opsional; tanpa DSN API tetap boot)
+- Alert stok: `POST /api/v1/alerts/low-stock` (manual) + cron harian 08:00 `Asia/Jakarta` (debounce 6 jam per tenant)
+- Demo data: `pnpm --filter @kranjang/db seed:demo` (butuh user `owner@kranjang.local` sudah terdaftar)
 
 ## Env production wajib
 - `NODE_ENV=production`
