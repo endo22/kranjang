@@ -5,22 +5,34 @@ import { AppError } from "./app-error.js";
 
 const WRITABLE_STATUSES = new Set(["TRIAL", "ACTIVE", "GRACE_PERIOD"]);
 
-export async function requireTenantOutlet(prisma: PrismaService, currentUser: JwtPayload) {
+export async function requireTenantOutlet(
+  prisma: PrismaService,
+  currentUser: JwtPayload,
+  preferredOutletId?: string | null,
+) {
   const tenant = await prisma.tenant.findFirst({
     where: { id: currentUser.tid, deletedAt: null },
-    include: { settings: true },
+    include: { settings: true, subscriptionPlan: true },
   });
 
   if (!tenant) {
     throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
   }
 
-  const outlet = await prisma.outlet.findFirst({
-    where: { tenantId: currentUser.tid, deletedAt: null, isDefault: true },
-  });
+  const outlet = preferredOutletId
+    ? await prisma.outlet.findFirst({
+        where: { id: preferredOutletId, tenantId: currentUser.tid, deletedAt: null },
+      })
+    : await prisma.outlet.findFirst({
+        where: { tenantId: currentUser.tid, deletedAt: null, isDefault: true },
+      });
 
   if (!outlet) {
-    throw new AppError("INTERNAL_ERROR", "Terjadi kesalahan. Silakan coba lagi.", 500);
+    throw new AppError(
+      preferredOutletId ? "NOT_FOUND" : "INTERNAL_ERROR",
+      preferredOutletId ? "Outlet tidak ditemukan." : "Terjadi kesalahan. Silakan coba lagi.",
+      preferredOutletId ? 404 : 500,
+    );
   }
 
   return { tenant, outlet };

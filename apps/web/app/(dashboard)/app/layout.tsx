@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 const GUARDED_ROUTES = [
   { prefix: "/app/users", permission: "user.manage" },
   { prefix: "/app/settings", permission: "settings.manage" },
+  { prefix: "/app/outlets", permission: "settings.manage" },
   { prefix: "/app/products", permission: "product.view" },
   { prefix: "/app/inventory", permission: "inventory.view" },
   { prefix: "/app/purchases", permission: "purchase.view" },
@@ -26,9 +27,9 @@ const GUARDED_ROUTES = [
 
 function ShellSkeleton() {
   return (
-    <div className="min-h-screen bg-[#f7f7f8] p-4 sm:p-6">
+    <div className="min-h-[100dvh] bg-[#f4f6f5] p-4 sm:p-6">
       <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[280px_1fr]">
-        <div className="hidden h-[calc(100vh-3rem)] animate-pulse rounded-[28px] bg-white lg:block" />
+        <div className="hidden h-[calc(100dvh-3rem)] animate-pulse rounded-[28px] bg-white lg:block" />
         <div className="space-y-4">
           <div className="h-20 animate-pulse rounded-[28px] bg-white" />
           <div className="h-24 animate-pulse rounded-[28px] bg-white" />
@@ -92,10 +93,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f8] p-4 sm:p-6">
+    <div className="min-h-[100dvh] bg-[#f4f6f5] p-4 sm:p-6">
       <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[280px_1fr]">
-        <div className="hidden lg:block">
-          <div className="sticky top-6 h-[calc(100vh-3rem)]">
+        <div className="hidden min-h-0 lg:block">
+          <div className="sticky top-6 h-[calc(100dvh-3rem)] min-h-0">
             <AppSidebar pathname={pathname} permissions={session.user.permissions} />
           </div>
         </div>
@@ -121,12 +122,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-        <SheetContent side="left" className="w-[88vw] max-w-sm border-r border-[#e5e7eb] bg-[#f7f7f8] p-4">
+        <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col border-r border-[#e2e6e4] bg-[#f4f6f5] p-4">
           <AppSidebar
             pathname={pathname}
             permissions={session.user.permissions}
             onNavigate={() => setMobileSidebarOpen(false)}
-            className="h-full"
+            className="min-h-0 flex-1"
           />
         </SheetContent>
       </Sheet>

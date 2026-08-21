@@ -18,6 +18,7 @@ export const NAV = [
   { href: "/app/reports", label: "Laporan", kind: "perm" as const, permission: "report.view" },
   { href: "/app/users", label: "User & Role", kind: "perm" as const, permission: "user.manage" },
   { href: "/app/settings", label: "Pengaturan", kind: "perm" as const, permission: "settings.manage" },
+  { href: "/app/outlets", label: "Outlet", kind: "perm" as const, permission: "settings.manage" },
   { href: "/app/subscription", label: "Subscription", kind: "perm" as const, permission: "subscription.manage" },
 ];
 
@@ -48,13 +49,18 @@ export function AppSidebar({ pathname, permissions, onNavigate, className }: App
   const items = NAV.filter((item) => canSeeItem(item, permissions));
 
   return (
-    <aside className={cn("flex h-full flex-col rounded-[28px] border border-[#e5e7eb] bg-white p-5", className)}>
-      <div className="mb-6">
+    <aside
+      className={cn(
+        "flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-[#e5e7eb] bg-white p-5",
+        className,
+      )}
+    >
+      <div className="mb-5 shrink-0">
         <BrandLogo href="/app" size="md" className="max-w-full" onClick={onNavigate} />
         <p className="mt-2 text-sm leading-6 text-[#616161]">Panel operasional untuk tenant Kranjang.</p>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain pe-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
         {items.map((item) => {
           const active = isActive(pathname, item.href);
 
@@ -64,7 +70,7 @@ export function AppSidebar({ pathname, permissions, onNavigate, className }: App
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                "rounded-2xl px-4 py-3 text-[0.875rem] transition-colors",
+                "shrink-0 rounded-2xl px-4 py-2.5 text-[0.875rem] transition-colors",
                 active ? "bg-[#17171c] !text-[#ffffff]" : "text-[#212121] hover:bg-[#17171c]/5",
               )}
             >

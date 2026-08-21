@@ -4,6 +4,7 @@ import type { Response } from "express";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
+import { CurrentOutletId } from "../common/current-outlet.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
 import { parsePagination } from "../common/pagination.js";
@@ -28,8 +29,12 @@ export class SalesController {
   @Post("cashier-sessions/open")
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions("sales.create")
-  open(@CurrentUser() user: JwtPayload | undefined, @Body(new ZodPipe(cashierOpenSchema)) body: z.infer<typeof cashierOpenSchema>) {
-    return this.salesService.openSession(this.require(user), body);
+  open(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Body(new ZodPipe(cashierOpenSchema)) body: z.infer<typeof cashierOpenSchema>,
+  ) {
+    return this.salesService.openSession(this.require(user), body, outletId);
   }
 
   @Post("cashier-sessions/:id/close")
@@ -68,8 +73,12 @@ export class SalesController {
   @Post("sales")
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions("sales.create")
-  create(@CurrentUser() user: JwtPayload | undefined, @Body(new ZodPipe(saleSchema)) body: z.infer<typeof saleSchema>) {
-    return this.salesService.createSale(this.require(user), body);
+  create(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Body(new ZodPipe(saleSchema)) body: z.infer<typeof saleSchema>,
+  ) {
+    return this.salesService.createSale(this.require(user), body, outletId);
   }
 
   @Post("sales/:id/cancel")

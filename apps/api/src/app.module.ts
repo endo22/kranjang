@@ -19,6 +19,7 @@ import { ReportsModule } from "./reports/reports.module.js";
 import { BillingModule } from "./billing/billing.module.js";
 import { AdminModule } from "./admin/admin.module.js";
 import { AlertsModule } from "./alerts/alerts.module.js";
+import { OutletsModule } from "./outlets/outlets.module.js";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AlertsModule } from "./alerts/alerts.module.js";
     RolesModule,
     MeModule,
     TenantsModule,
+    OutletsModule,
     CatalogModule,
     InventoryModule,
     SalesModule,

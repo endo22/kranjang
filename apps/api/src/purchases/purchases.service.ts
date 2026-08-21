@@ -43,8 +43,8 @@ export class PurchasesService {
     return this.toPurchase(row);
   }
 
-  async create(currentUser: JwtPayload, body: z.infer<typeof purchaseSchema>) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+  async create(currentUser: JwtPayload, body: z.infer<typeof purchaseSchema>, preferredOutletId?: string) {
+    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser, preferredOutletId);
     assertWritableSubscription(tenant.subscriptionStatus);
 
     const itemsTotal = body.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
@@ -91,8 +91,8 @@ export class PurchasesService {
     return this.toPurchase(purchase);
   }
 
-  async receive(currentUser: JwtPayload, id: string, body: ReceiveBody = {}) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+  async receive(currentUser: JwtPayload, id: string, body: ReceiveBody = {}, preferredOutletId?: string) {
+    const { tenant } = await requireTenantOutlet(this.prisma, currentUser, preferredOutletId);
     assertWritableSubscription(tenant.subscriptionStatus);
 
     return this.prisma.$transaction(async (tx) => {
@@ -144,7 +144,7 @@ export class PurchasesService {
 
         await applyStockMovement(tx, {
           tenantId: currentUser.tid,
-          outletId: outlet.id,
+          outletId: purchase.outletId,
           productId: item.productId,
           qtyDelta: line.quantity,
           movementType: "PURCHASE",
@@ -179,7 +179,7 @@ export class PurchasesService {
   }
 
   async createReturn(currentUser: JwtPayload, id: string, body: ReturnBody) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+    const { tenant } = await requireTenantOutlet(this.prisma, currentUser);
     assertWritableSubscription(tenant.subscriptionStatus);
 
     return this.prisma.$transaction(async (tx) => {
@@ -213,7 +213,7 @@ export class PurchasesService {
       const purchaseReturn = await tx.purchaseReturn.create({
         data: {
           tenantId: currentUser.tid,
-          outletId: outlet.id,
+          outletId: purchase.outletId,
           purchaseId: purchase.id,
           notes: body.notes,
           createdById: currentUser.sub,
@@ -236,7 +236,7 @@ export class PurchasesService {
         const item = byId.get(line.purchaseItemId)!;
         await applyStockMovement(tx, {
           tenantId: currentUser.tid,
-          outletId: outlet.id,
+          outletId: purchase.outletId,
           productId: item.productId,
           qtyDelta: -line.quantity,
           movementType: "PURCHASE_RETURN",

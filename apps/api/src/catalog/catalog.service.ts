@@ -102,6 +102,7 @@ export class CatalogService {
       limit?: number;
       offset?: number;
     },
+    preferredOutletId?: string,
   ) {
     const where = {
       tenantId: currentUser.tid,
@@ -128,16 +129,45 @@ export class CatalogService {
       }),
     ]);
 
-    return { items: products.map((product) => this.toProduct(product)), total };
+    let stockByProduct = new Map<string, number>();
+    if (preferredOutletId) {
+      const stocks = await this.prisma.outletStock.findMany({
+        where: {
+          tenantId: currentUser.tid,
+          outletId: preferredOutletId,
+          productId: { in: products.map((product) => product.id) },
+        },
+      });
+      stockByProduct = new Map(stocks.map((row) => [row.productId, asNumber(row.stock)]));
+    }
+
+    return {
+      items: products.map((product) =>
+        this.toProduct(product, preferredOutletId ? (stockByProduct.get(product.id) ?? 0) : undefined),
+      ),
+      total,
+    };
   }
 
-  async getProduct(currentUser: JwtPayload, id: string) {
+  async getProduct(currentUser: JwtPayload, id: string, preferredOutletId?: string) {
     const product = await this.getProductRecord(currentUser, id);
-    return this.toProduct(product);
+    if (!preferredOutletId) {
+      return this.toProduct(product);
+    }
+    const stock = await this.prisma.outletStock.findUnique({
+      where: {
+        tenantId_outletId_productId: {
+          tenantId: currentUser.tid,
+          outletId: preferredOutletId,
+          productId: id,
+        },
+      },
+    });
+    return this.toProduct(product, asNumber(stock?.stock ?? 0));
   }
 
-  async createProduct(currentUser: JwtPayload, body: ProductBody) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+  async createProduct(currentUser: JwtPayload, body: ProductBody, preferredOutletId?: string) {
+    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser, preferredOutletId);
     assertWritableSubscription(tenant.subscriptionStatus);
 
     let productId = "";
@@ -160,6 +190,15 @@ export class CatalogService {
             minStock: body.minStock ?? 0,
             targetMargin: body.targetMargin ?? null,
             isActive: body.isActive ?? true,
+          },
+        });
+
+        await tx.outletStock.create({
+          data: {
+            tenantId: currentUser.tid,
+            outletId: outlet.id,
+            productId: created.id,
+            stock: 0,
           },
         });
 
@@ -189,7 +228,7 @@ export class CatalogService {
       this.rethrowProductConflict(error);
     }
 
-    return this.getProduct(currentUser, productId);
+    return this.getProduct(currentUser, productId, preferredOutletId);
   }
 
   async updateProduct(currentUser: JwtPayload, id: string, body: PatchProductBody) {
@@ -325,25 +364,33 @@ export class CatalogService {
     throw error;
   }
 
-  private toProduct(product: {
-    id: string;
-    name: string;
-    productType: string;
-    unit: string;
-    sku: string | null;
-    barcode: string | null;
-    categoryId?: string | null;
-    buyPrice: unknown;
-    sellPrice: unknown;
-    avgCost: unknown;
-    stock: unknown;
-    minStock: unknown;
-    targetMargin: unknown | null;
-    isActive: boolean;
-    category: { id: string; name: string } | null;
-    images: Array<{ storagePath: string }>;
-    recipeAsMenu?: Array<{ ingredientId: string; quantity: unknown; unit: string; ingredient?: { name: string; avgCost: unknown } }>;
-  }) {
+  private toProduct(
+    product: {
+      id: string;
+      name: string;
+      productType: string;
+      unit: string;
+      sku: string | null;
+      barcode: string | null;
+      categoryId?: string | null;
+      buyPrice: unknown;
+      sellPrice: unknown;
+      avgCost: unknown;
+      stock: unknown;
+      minStock: unknown;
+      targetMargin: unknown | null;
+      isActive: boolean;
+      category: { id: string; name: string } | null;
+      images: Array<{ storagePath: string }>;
+      recipeAsMenu?: Array<{
+        ingredientId: string;
+        quantity: unknown;
+        unit: string;
+        ingredient?: { name: string; avgCost: unknown };
+      }>;
+    },
+    stockOverride?: number,
+  ) {
     const recipeItems = product.recipeAsMenu ?? [];
     const hpp = recipeItems.length
       ? this.recipeCost(recipeItems.map((item) => ({ quantity: item.quantity, ingredient: item.ingredient ?? { avgCost: 0 } })))
@@ -360,18 +407,18 @@ export class CatalogService {
       buyPrice: asNumber(product.buyPrice),
       sellPrice: asNumber(product.sellPrice),
       avgCost: asNumber(product.avgCost),
-      stock: roundQty(asNumber(product.stock)),
+      stock: stockOverride !== undefined ? stockOverride : asNumber(product.stock),
       minStock: asNumber(product.minStock),
-      targetMargin: product.targetMargin === null || product.targetMargin === undefined ? null : asNumber(product.targetMargin),
+      targetMargin: product.targetMargin == null ? null : asNumber(product.targetMargin),
       isActive: product.isActive,
-      hpp,
       category: product.category,
       imageUrl: product.images[0]?.storagePath ?? null,
+      hpp,
       recipe: recipeItems.map((item) => ({
         ingredientId: item.ingredientId,
+        ingredientName: item.ingredient?.name,
         quantity: asNumber(item.quantity),
         unit: item.unit,
-        ingredientName: item.ingredient?.name,
       })),
     };
   }

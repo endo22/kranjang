@@ -41,6 +41,7 @@ model Tenant {
   purchaseItems      PurchaseItem[]
   purchaseReturns    PurchaseReturn[]
   purchaseReturnItems PurchaseReturnItem[]
+  outletStocks       OutletStock[]
   customers          Customer[]
   cashierSessions    CashierSession[]
   sales              Sale[]
@@ -167,9 +168,26 @@ model Outlet {
   sales     Sale[]
   expenses  Expense[]
   movements StockMovement[]
+  outletStocks OutletStock[]
 
   @@unique([tenantId, name])
   @@map("outlets")
+}
+
+model OutletStock {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  outletId  String   @map("outlet_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  stock     Decimal  @default(0) @db.Decimal(18, 4)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet    Outlet   @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, outletId, productId])
+  @@index([tenantId, productId])
+  @@map("outlet_stocks")
 }
 
 model SubscriptionPlan {
@@ -290,6 +308,7 @@ model Product {
   purchaseReturnItems PurchaseReturnItem[]
   saleItems     SaleItem[]
   movements     StockMovement[]
+  outletStocks  OutletStock[]
 
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])

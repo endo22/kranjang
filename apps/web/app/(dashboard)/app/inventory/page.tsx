@@ -38,15 +38,25 @@ export default function InventoryPage() {
   const [quantity, setQuantity] = useState("0");
   const [movementType, setMovementType] = useState("ADJUSTMENT");
   const [notes, setNotes] = useState("");
+  const [outlets, setOutlets] = useState<Array<{ id: string; name: string }>>([]);
+  const [fromOutletId, setFromOutletId] = useState("");
+  const [toOutletId, setToOutletId] = useState("");
+  const [transferQty, setTransferQty] = useState("1");
+  const [transferProductId, setTransferProductId] = useState("");
 
   async function load(filters = { from: filterFrom, to: filterTo, productId: filterProductId }) {
-    const [movements, nextProducts] = await Promise.all([
+    const [movements, nextProducts, nextOutlets] = await Promise.all([
       api<{ items: Movement[] }>(buildInventoryMovementsPath(filters)),
       api<{ items: Product[] }>("/products?limit=100"),
+      api<Array<{ id: string; name: string }>>("/outlets"),
     ]);
     setRows(movements.items);
     setProducts(nextProducts.items);
+    setOutlets(nextOutlets);
     setProductId((current) => current || nextProducts.items[0]?.id || "");
+    setTransferProductId((current) => current || nextProducts.items[0]?.id || "");
+    setFromOutletId((current) => current || nextOutlets[0]?.id || "");
+    setToOutletId((current) => current || nextOutlets[1]?.id || nextOutlets[0]?.id || "");
   }
 
   useEffect(() => {
@@ -165,6 +175,75 @@ export default function InventoryPage() {
             />
             <Button type="submit" disabled={!productId}>
               Simpan
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Transfer antar outlet</CardTitle>
+          <CardDescription>Pindahkan stok dari outlet asal ke tujuan.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_120px_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void api("/inventory/transfer", {
+                method: "POST",
+                ...jsonInit({
+                  productId: transferProductId,
+                  fromOutletId,
+                  toOutletId,
+                  quantity: Number(transferQty),
+                }),
+              })
+                .then(async () => {
+                  await load();
+                  toast.success("Transfer stok berhasil.");
+                })
+                .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal"));
+            }}
+          >
+            <select
+              className="h-11 rounded-2xl border border-[#e5e7eb] px-3"
+              value={transferProductId}
+              onChange={(event) => setTransferProductId(event.target.value)}
+            >
+              {products
+                .filter((product) => product.productType !== "RECIPE")
+                .map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+            </select>
+            <select
+              className="h-11 rounded-2xl border border-[#e5e7eb] px-3"
+              value={fromOutletId}
+              onChange={(event) => setFromOutletId(event.target.value)}
+            >
+              {outlets.map((outlet) => (
+                <option key={outlet.id} value={outlet.id}>
+                  Dari: {outlet.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-11 rounded-2xl border border-[#e5e7eb] px-3"
+              value={toOutletId}
+              onChange={(event) => setToOutletId(event.target.value)}
+            >
+              {outlets.map((outlet) => (
+                <option key={outlet.id} value={outlet.id}>
+                  Ke: {outlet.name}
+                </option>
+              ))}
+            </select>
+            <Input type="number" min="0.0001" step="any" value={transferQty} onChange={(event) => setTransferQty(event.target.value)} />
+            <Button type="submit" disabled={!transferProductId || outlets.length < 2}>
+              Transfer
             </Button>
           </form>
         </CardContent>

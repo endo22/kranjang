@@ -3,6 +3,7 @@ import { purchaseReceiveSchema, purchaseReturnSchema, purchaseSchema } from "@kr
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
+import { CurrentOutletId } from "../common/current-outlet.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
 import { parsePagination } from "../common/pagination.js";
@@ -35,8 +36,12 @@ export class PurchasesController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions("purchase.create")
-  create(@CurrentUser() user: JwtPayload | undefined, @Body(new ZodPipe(purchaseSchema)) body: z.infer<typeof purchaseSchema>) {
-    return this.purchasesService.create(this.require(user), body);
+  create(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Body(new ZodPipe(purchaseSchema)) body: z.infer<typeof purchaseSchema>,
+  ) {
+    return this.purchasesService.create(this.require(user), body, outletId);
   }
 
   @Post(":id/receive")

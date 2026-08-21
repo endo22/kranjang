@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/common";
-import { inventoryAdjustSchema } from "@kranjang/shared";
+import { inventoryAdjustSchema, stockTransferSchema } from "@kranjang/shared";
 import { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
+import { CurrentOutletId } from "../common/current-outlet.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
 import { parsePagination } from "../common/pagination.js";
@@ -28,6 +29,7 @@ export class InventoryController {
   @RequirePermissions("inventory.view")
   movements(
     @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
     @Query() query: { from?: string; to?: string; productId?: string; limit?: string; offset?: string },
   ) {
     const parsed = inventoryMovementsQuerySchema.safeParse(query);
@@ -41,14 +43,28 @@ export class InventoryController {
       from: parsed.data.from,
       to: parsed.data.to,
       productId: parsed.data.productId,
+      outletId,
       ...page,
     });
   }
 
   @Post("adjust")
   @RequirePermissions("inventory.adjust")
-  adjust(@CurrentUser() user: JwtPayload | undefined, @Body(new ZodPipe(inventoryAdjustSchema)) body: z.infer<typeof inventoryAdjustSchema>) {
-    return this.inventoryService.adjust(this.require(user), body);
+  adjust(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Body(new ZodPipe(inventoryAdjustSchema)) body: z.infer<typeof inventoryAdjustSchema>,
+  ) {
+    return this.inventoryService.adjust(this.require(user), body, outletId);
+  }
+
+  @Post("transfer")
+  @RequirePermissions("inventory.adjust")
+  transfer(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Body(new ZodPipe(stockTransferSchema)) body: z.infer<typeof stockTransferSchema>,
+  ) {
+    return this.inventoryService.transfer(this.require(user), body);
   }
 
   private require(user: JwtPayload | undefined): JwtPayload {

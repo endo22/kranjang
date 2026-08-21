@@ -3,6 +3,7 @@ import { categorySchema, patchProductSchema, productSchema, recipeSchema } from 
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
+import { CurrentOutletId } from "../common/current-outlet.js";
 import { CurrentUser } from "../common/current-user.js";
 import { JwtAuthGuard } from "../common/jwt-auth.guard.js";
 import { parsePagination } from "../common/pagination.js";
@@ -52,6 +53,7 @@ export class CatalogController {
   @RequirePermissions("product.view")
   listProducts(
     @CurrentUser() currentUser: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
     @Query("q") q?: string,
     @Query("categoryId") categoryId?: string,
     @Query("productType") productType?: string,
@@ -61,18 +63,26 @@ export class CatalogController {
     @Query("offset") offset?: string,
   ) {
     const page = parsePagination(limit, offset);
-    return this.catalogService.listProducts(this.requireUser(currentUser), {
-      q: q ?? legacySearch,
-      categoryId,
-      productType: productType ?? legacyType,
-      ...page,
-    });
+    return this.catalogService.listProducts(
+      this.requireUser(currentUser),
+      {
+        q: q ?? legacySearch,
+        categoryId,
+        productType: productType ?? legacyType,
+        ...page,
+      },
+      outletId,
+    );
   }
 
   @Get("products/:id")
   @RequirePermissions("product.view")
-  getProduct(@CurrentUser() currentUser: JwtPayload | undefined, @Param("id") id: string) {
-    return this.catalogService.getProduct(this.requireUser(currentUser), id);
+  getProduct(
+    @CurrentUser() currentUser: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Param("id") id: string,
+  ) {
+    return this.catalogService.getProduct(this.requireUser(currentUser), id, outletId);
   }
 
   @Post("products")
@@ -80,9 +90,10 @@ export class CatalogController {
   @RequirePermissions("product.create")
   createProduct(
     @CurrentUser() currentUser: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
     @Body(new ZodPipe(productSchema)) body: z.infer<typeof productSchema>,
   ) {
-    return this.catalogService.createProduct(this.requireUser(currentUser), body);
+    return this.catalogService.createProduct(this.requireUser(currentUser), body, outletId);
   }
 
   @Patch("products/:id")

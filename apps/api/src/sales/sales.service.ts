@@ -20,8 +20,8 @@ export class SalesService {
     });
   }
 
-  async openSession(currentUser: JwtPayload, body: z.infer<typeof cashierOpenSchema>) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+  async openSession(currentUser: JwtPayload, body: z.infer<typeof cashierOpenSchema>, preferredOutletId?: string) {
+    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser, preferredOutletId);
     assertWritableSubscription(tenant.subscriptionStatus);
     const existing = await this.currentSession(currentUser);
     if (existing) {
@@ -125,8 +125,8 @@ export class SalesService {
     return this.toSale(row);
   }
 
-  async createSale(currentUser: JwtPayload, body: z.infer<typeof saleSchema>) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+  async createSale(currentUser: JwtPayload, body: z.infer<typeof saleSchema>, preferredOutletId?: string) {
+    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser, preferredOutletId);
     assertWritableSubscription(tenant.subscriptionStatus);
     const session = await this.currentSession(currentUser);
     if (!session) {

@@ -167,8 +167,24 @@ export function setSessionExpiredHandler(handler: SessionExpiredHandler | null) 
   sessionExpiredHandler = handler;
 }
 
-export function getAccessToken() {
-  return accessToken;
+const OUTLET_STORAGE_KEY = "kranjang_active_outlet_id";
+
+export function getActiveOutletId() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(OUTLET_STORAGE_KEY);
+}
+
+export function setActiveOutletId(outletId: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (!outletId) {
+    window.localStorage.removeItem(OUTLET_STORAGE_KEY);
+    return;
+  }
+  window.localStorage.setItem(OUTLET_STORAGE_KEY, outletId);
 }
 
 export function jsonInit(body: unknown): Pick<RequestInit, "body" | "headers"> {
@@ -186,6 +202,11 @@ export async function api<T>(path: string, init: RequestInit = {}, options: ApiO
 
   if (accessToken && includeAuthorization) {
     headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  const outletId = getActiveOutletId();
+  if (outletId && includeAuthorization) {
+    headers.set("X-Outlet-Id", outletId);
   }
 
   const response = await fetch(toUrl(path), {
@@ -220,6 +241,10 @@ export async function downloadApi(path: string, fallbackFilename: string) {
   const headers = new Headers();
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+  const outletId = getActiveOutletId();
+  if (outletId) {
+    headers.set("X-Outlet-Id", outletId);
   }
 
   const response = await fetch(toUrl(path), {

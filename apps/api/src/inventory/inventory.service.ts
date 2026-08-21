@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@kranjang/db";
-import type { inventoryAdjustSchema } from "@kranjang/shared";
+import type { inventoryAdjustSchema, stockTransferSchema } from "@kranjang/shared";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
 import { AppError } from "../common/app-error.js";
@@ -34,7 +34,17 @@ export async function applyStockMovement(
     throw new AppError("NOT_FOUND", "Data tidak ditemukan.", 404);
   }
 
-  const stockBefore = asNumber(product.stock);
+  const existing = await tx.outletStock.findUnique({
+    where: {
+      tenantId_outletId_productId: {
+        tenantId: input.tenantId,
+        outletId: input.outletId,
+        productId: input.productId,
+      },
+    },
+  });
+
+  const stockBefore = asNumber(existing?.stock ?? 0);
   const stockAfter = roundQty(stockBefore + input.qtyDelta);
   if (stockAfter < -0.00001 && !input.allowNegative) {
     throw new AppError("STOCK_INSUFFICIENT", `Stok ${product.name} tidak cukup`, 400, {
@@ -53,9 +63,32 @@ export async function applyStockMovement(
         : (stockBefore * avgCost + input.updateAvgCost.qtyAdded * input.updateAvgCost.unitCost) / newQty;
   }
 
+  await tx.outletStock.upsert({
+    where: {
+      tenantId_outletId_productId: {
+        tenantId: input.tenantId,
+        outletId: input.outletId,
+        productId: input.productId,
+      },
+    },
+    create: {
+      tenantId: input.tenantId,
+      outletId: input.outletId,
+      productId: input.productId,
+      stock: stockAfter,
+    },
+    update: { stock: stockAfter },
+  });
+
+  const totals = await tx.outletStock.aggregate({
+    where: { tenantId: input.tenantId, productId: input.productId },
+    _sum: { stock: true },
+  });
+  const totalStock = roundQty(asNumber(totals._sum.stock ?? 0));
+
   await tx.product.update({
     where: { id: product.id },
-    data: { stock: stockAfter, avgCost },
+    data: { stock: totalStock, avgCost },
   });
 
   await tx.stockMovement.create({
@@ -75,7 +108,7 @@ export async function applyStockMovement(
     },
   });
 
-  return { product, stockBefore, stockAfter, avgCost };
+  return { product, stockBefore, stockAfter, avgCost, totalStock };
 }
 
 @Injectable()
@@ -84,12 +117,15 @@ export class InventoryService {
 
   async movements(
     currentUser: JwtPayload,
-    query: { from?: string; to?: string; productId?: string; limit?: number; offset?: number },
+    query: { from?: string; to?: string; productId?: string; outletId?: string; limit?: number; offset?: number },
   ) {
     const where: Prisma.StockMovementWhereInput = { tenantId: currentUser.tid };
 
     if (query.productId) {
       where.productId = query.productId;
+    }
+    if (query.outletId) {
+      where.outletId = query.outletId;
     }
 
     if (query.from || query.to) {
@@ -119,6 +155,7 @@ export class InventoryService {
         id: row.id,
         productId: row.productId,
         productName: row.product.name,
+        outletId: row.outletId,
         movementType: row.movementType,
         quantity: asNumber(row.quantity),
         stockBefore: asNumber(row.stockBefore),
@@ -130,8 +167,12 @@ export class InventoryService {
     };
   }
 
-  async adjust(currentUser: JwtPayload, body: z.infer<typeof inventoryAdjustSchema>) {
-    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser);
+  async adjust(
+    currentUser: JwtPayload,
+    body: z.infer<typeof inventoryAdjustSchema>,
+    preferredOutletId?: string,
+  ) {
+    const { tenant, outlet } = await requireTenantOutlet(this.prisma, currentUser, preferredOutletId);
     assertWritableSubscription(tenant.subscriptionStatus);
 
     return this.prisma.$transaction(async (tx) => {
@@ -145,9 +186,63 @@ export class InventoryService {
         userId: currentUser.sub,
         allowNegative: tenant.allowNegativeStock,
         notes: body.notes,
-        unitCost: body.movementType === "INITIAL_STOCK" ? undefined : undefined,
       });
-      return { success: true, stockAfter: result.stockAfter };
+      return { success: true, stockAfter: result.stockAfter, outletId: outlet.id };
+    });
+  }
+
+  async transfer(
+    currentUser: JwtPayload,
+    body: z.infer<typeof stockTransferSchema>,
+  ) {
+    const { tenant } = await requireTenantOutlet(this.prisma, currentUser);
+    assertWritableSubscription(tenant.subscriptionStatus);
+
+    if (body.fromOutletId === body.toOutletId) {
+      throw new AppError("VALIDATION_ERROR", "Outlet asal dan tujuan harus berbeda.", 400);
+    }
+
+    const [fromOutlet, toOutlet] = await Promise.all([
+      this.prisma.outlet.findFirst({
+        where: { id: body.fromOutletId, tenantId: currentUser.tid, deletedAt: null },
+      }),
+      this.prisma.outlet.findFirst({
+        where: { id: body.toOutletId, tenantId: currentUser.tid, deletedAt: null },
+      }),
+    ]);
+    if (!fromOutlet || !toOutlet) {
+      throw new AppError("NOT_FOUND", "Outlet tidak ditemukan.", 404);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await applyStockMovement(tx, {
+        tenantId: currentUser.tid,
+        outletId: fromOutlet.id,
+        productId: body.productId,
+        qtyDelta: -body.quantity,
+        movementType: "STOCK_TRANSFER",
+        referenceType: "STOCK_TRANSFER",
+        notes: body.notes ?? `Transfer ke ${toOutlet.name}`,
+        userId: currentUser.sub,
+        allowNegative: tenant.allowNegativeStock,
+      });
+      await applyStockMovement(tx, {
+        tenantId: currentUser.tid,
+        outletId: toOutlet.id,
+        productId: body.productId,
+        qtyDelta: body.quantity,
+        movementType: "STOCK_TRANSFER",
+        referenceType: "STOCK_TRANSFER",
+        notes: body.notes ?? `Transfer dari ${fromOutlet.name}`,
+        userId: currentUser.sub,
+        allowNegative: true,
+      });
+      return {
+        success: true,
+        fromOutletId: fromOutlet.id,
+        toOutletId: toOutlet.id,
+        quantity: body.quantity,
+      };
     });
   }
 }

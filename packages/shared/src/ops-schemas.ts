@@ -118,6 +118,26 @@ export const inventoryAdjustSchema = z
     }
   });
 
+export const stockTransferSchema = z.object({
+  productId: z.string().uuid(),
+  fromOutletId: z.string().uuid(),
+  toOutletId: z.string().uuid(),
+  quantity: z.number().positive(),
+  notes: optionalText,
+});
+
+export const outletSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  address: optionalText,
+  isDefault: z.boolean().optional(),
+});
+
+export const patchOutletSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  address: optionalText,
+  isDefault: z.boolean().optional(),
+});
+
 export const cashierOpenSchema = z.object({
   openingCash: z.number().min(0).optional(),
 });

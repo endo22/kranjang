@@ -2,6 +2,7 @@
 
 import { LogOut, Menu, UserCircle2 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { api, getActiveOutletId, setActiveOutletId } from "@/lib/api";
+
+type Outlet = { id: string; name: string; isDefault: boolean };
 
 type AppTopbarProps = {
   tenantName: string;
@@ -39,6 +43,25 @@ export function AppTopbar({
   onLogout,
   isLoggingOut,
 }: AppTopbarProps) {
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [activeOutletId, setActive] = useState<string>("");
+
+  useEffect(() => {
+    void api<Outlet[]>("/outlets")
+      .then((rows) => {
+        setOutlets(rows);
+        const stored = getActiveOutletId();
+        const chosen = rows.find((row) => row.id === stored) ?? rows.find((row) => row.isDefault) ?? rows[0];
+        if (chosen) {
+          setActive(chosen.id);
+          setActiveOutletId(chosen.id);
+        }
+      })
+      .catch(() => {
+        setOutlets([]);
+      });
+  }, []);
+
   return (
     <header className="flex items-center justify-between gap-4 rounded-[28px] border border-[#e5e7eb] bg-white px-4 py-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
@@ -51,6 +74,26 @@ export function AppTopbar({
           <p className="truncate text-sm text-[#616161]">Tenant aktif</p>
           <h1 className="truncate text-lg font-medium text-[#17171c]">{tenantName}</h1>
         </div>
+
+        {outlets.length > 0 ? (
+          <select
+            className="h-10 max-w-[180px] rounded-2xl border border-[#e5e7eb] bg-white px-3 text-sm"
+            value={activeOutletId}
+            onChange={(event) => {
+              const next = event.target.value;
+              setActive(next);
+              setActiveOutletId(next);
+              window.location.reload();
+            }}
+            aria-label="Outlet aktif"
+          >
+            {outlets.map((outlet) => (
+              <option key={outlet.id} value={outlet.id}>
+                {outlet.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
       <DropdownMenu>

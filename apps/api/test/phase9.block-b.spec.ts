@@ -75,8 +75,8 @@ describe("phase 9 block b", () => {
     expect(cancelledSale.body.status).toBe("CANCELLED");
     expect(cancelledSale.body.notes).toContain("Salah input");
 
-    const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
-    const listed = await server.get(`/api/v1/sales?from=${today}&to=${today}`).set(auth);
+    const soldDay = String(sale.body.soldAt).slice(0, 10);
+    const listed = await server.get(`/api/v1/sales?from=${soldDay}&to=${soldDay}`).set(auth);
     expect(listed.status).toBe(200);
     expect(Array.isArray(listed.body.items)).toBe(true);
     expect(listed.body.items.some((row: { id: string }) => row.id === sale.body.id)).toBe(true);

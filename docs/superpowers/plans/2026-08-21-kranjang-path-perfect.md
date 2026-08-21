@@ -16,9 +16,15 @@
 - `POST /purchases/:id/receive` body qty opsional; `POST /purchases/:id/returns`
 - UI detail pembelian: terima parsial + retur
 
+## Wave 6 (eksekusi) — multi-outlet + transfer
+
+- `OutletStock` per outlet; movement `STOCK_TRANSFER`
+- Header `X-Outlet-Id` untuk konteks outlet aktif
+- `CRUD /outlets` + enforce `maxOutlets` / `featureMultiOutlet` (Business 3, Pro 5)
+- UI: switcher topbar, halaman Outlet, transfer di Inventory
+
 ## Waves berikutnya (belum dieksekusi)
 
-- Wave 6: multi-outlet + transfer
 - Wave 7: meja / hold bill / split payment
 - Wave 8: varian / konversi satuan / waste %
 - Wave 9: printer + polish prod
