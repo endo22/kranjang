@@ -1,5 +1,29 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
-import { cashierCloseSchema, cashierOpenSchema, dateRangeQuerySchema, saleCancelSchema, saleSchema } from "@kranjang/shared";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
+import {
+  cashierCloseSchema,
+  cashierOpenSchema,
+  dateRangeQuerySchema,
+  diningTableSchema,
+  patchDiningTableSchema,
+  saleCancelSchema,
+  saleHoldCheckoutSchema,
+  saleHoldSchema,
+  saleSchema,
+} from "@kranjang/shared";
 import type { Response } from "express";
 import type { z } from "zod";
 import type { JwtPayload } from "../auth/tokens.js";
@@ -89,6 +113,97 @@ export class SalesController {
     @Body(new ZodPipe(saleCancelSchema)) body: z.infer<typeof saleCancelSchema>,
   ) {
     return this.salesService.cancelSale(this.require(user), id, body);
+  }
+
+  @Get("dining-tables")
+  @RequirePermissions("sales.create")
+  listDiningTables(@CurrentUser() user: JwtPayload | undefined, @CurrentOutletId() outletId: string | undefined) {
+    return this.salesService.listDiningTables(this.require(user), outletId);
+  }
+
+  @Post("dining-tables")
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions("sales.create")
+  createDiningTable(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Body(new ZodPipe(diningTableSchema)) body: z.infer<typeof diningTableSchema>,
+  ) {
+    return this.salesService.createDiningTable(this.require(user), body, outletId);
+  }
+
+  @Patch("dining-tables/:id")
+  @RequirePermissions("sales.create")
+  patchDiningTable(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Param("id") id: string,
+    @Body(new ZodPipe(patchDiningTableSchema)) body: z.infer<typeof patchDiningTableSchema>,
+  ) {
+    return this.salesService.patchDiningTable(this.require(user), id, body, outletId);
+  }
+
+  @Delete("dining-tables/:id")
+  @RequirePermissions("sales.create")
+  deleteDiningTable(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Param("id") id: string,
+  ) {
+    return this.salesService.deleteDiningTable(this.require(user), id, outletId);
+  }
+
+  @Get("sale-holds")
+  @RequirePermissions("sales.create")
+  listSaleHolds(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Query("status") status?: string,
+  ) {
+    return this.salesService.listSaleHolds(this.require(user), status, outletId);
+  }
+
+  @Post("sale-holds")
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions("sales.create")
+  createSaleHold(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Body(new ZodPipe(saleHoldSchema)) body: z.infer<typeof saleHoldSchema>,
+  ) {
+    return this.salesService.createSaleHold(this.require(user), body, outletId);
+  }
+
+  @Patch("sale-holds/:id")
+  @RequirePermissions("sales.create")
+  updateSaleHold(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Param("id") id: string,
+    @Body(new ZodPipe(saleHoldSchema)) body: z.infer<typeof saleHoldSchema>,
+  ) {
+    return this.salesService.updateSaleHold(this.require(user), id, body, outletId);
+  }
+
+  @Post("sale-holds/:id/cancel")
+  @RequirePermissions("sales.create")
+  cancelSaleHold(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Param("id") id: string,
+  ) {
+    return this.salesService.cancelSaleHold(this.require(user), id, outletId);
+  }
+
+  @Post("sale-holds/:id/checkout")
+  @RequirePermissions("sales.create")
+  checkoutSaleHold(
+    @CurrentUser() user: JwtPayload | undefined,
+    @CurrentOutletId() outletId: string | undefined,
+    @Param("id") id: string,
+    @Body(new ZodPipe(saleHoldCheckoutSchema)) body: z.infer<typeof saleHoldCheckoutSchema>,
+  ) {
+    return this.salesService.checkoutSaleHold(this.require(user), id, body, outletId);
   }
 
   private require(user: JwtPayload | undefined): JwtPayload {

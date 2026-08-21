@@ -20,6 +20,7 @@ const GUARDED_ROUTES = [
   { prefix: "/app/sales", permission: "sales.view" },
   { prefix: "/app/customers", permission: "sales.view" },
   { prefix: "/app/cashier", permission: "sales.create" },
+  { prefix: "/app/tables", permission: "sales.create" },
   { prefix: "/app/expenses", permission: "expense.view" },
   { prefix: "/app/reports", permission: "report.view" },
   { prefix: "/app/subscription", permission: "subscription.manage" },

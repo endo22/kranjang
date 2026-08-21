@@ -23,9 +23,15 @@
 - `CRUD /outlets` + enforce `maxOutlets` / `featureMultiOutlet` (Business 3, Pro 5)
 - UI: switcher topbar, halaman Outlet, transfer di Inventory
 
+## Wave 7 (eksekusi) — meja / hold bill / split payment
+
+- `DiningTable`, `SaleHold` (+ items); sale opsional `diningTableId` / `saleHoldId`
+- `CRUD /dining-tables`, lifecycle `/sale-holds` (OPEN → cancel/checkout)
+- `POST /sales` menerima `payments[]` (jumlah = total) atau `paymentMethod` legacy
+- UI: halaman Meja, kasir hold bill + split payment; cash close hanya jumlah CASH
+
 ## Waves berikutnya (belum dieksekusi)
 
-- Wave 7: meja / hold bill / split payment
 - Wave 8: varian / konversi satuan / waste %
 - Wave 9: printer + polish prod
 - Wave 10: mobile / loyalty / marketplace

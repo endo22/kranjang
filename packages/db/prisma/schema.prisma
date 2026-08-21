@@ -47,6 +47,9 @@ model Tenant {
   sales              Sale[]
   saleItems          SaleItem[]
   salePayments       SalePayment[]
+  diningTables       DiningTable[]
+  saleHolds          SaleHold[]
+  saleHoldItems      SaleHoldItem[]
   expenseCategories  ExpenseCategory[]
   expenses           Expense[]
   stockMovements     StockMovement[]
@@ -96,6 +99,7 @@ model User {
   sessionsClosed           CashierSession[]          @relation("SessionClosedBy")
   salesAsCashier           Sale[]                    @relation("SaleCashier")
   salesCancelled           Sale[]                    @relation("SaleCancelledBy")
+  saleHoldsAsCashier       SaleHold[]                @relation("SaleHoldCashier")
   purchasesCreated         Purchase[]                @relation("PurchaseCreatedBy")
   purchaseReturnsCreated   PurchaseReturn[]          @relation("PurchaseReturnCreatedBy")
   expensesCreated          Expense[]                 @relation("ExpenseCreatedBy")
@@ -169,6 +173,8 @@ model Outlet {
   expenses  Expense[]
   movements StockMovement[]
   outletStocks OutletStock[]
+  diningTables DiningTable[]
+  saleHolds SaleHold[]
 
   @@unique([tenantId, name])
   @@map("outlets")
@@ -307,6 +313,7 @@ model Product {
   purchaseItems PurchaseItem[]
   purchaseReturnItems PurchaseReturnItem[]
   saleItems     SaleItem[]
+  saleHoldItems SaleHoldItem[]
   movements     StockMovement[]
   outletStocks  OutletStock[]
 
@@ -455,6 +462,7 @@ model Customer {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   sales     Sale[]
+  saleHolds SaleHold[]
 
   @@index([tenantId, name])
   @@index([tenantId, phone])
@@ -477,6 +485,7 @@ model CashierSession {
   openedBy    User      @relation("SessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
   closedBy    User?     @relation("SessionClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
   sales       Sale[]
+  saleHolds   SaleHold[]
 
   @@map("cashier_sessions")
 }
@@ -488,6 +497,8 @@ model Sale {
   cashierSessionId String          @map("cashier_session_id") @db.Uuid
   cashierId        String          @map("cashier_id") @db.Uuid
   customerId       String?         @map("customer_id") @db.Uuid
+  diningTableId    String?         @map("dining_table_id") @db.Uuid
+  saleHoldId       String?         @map("sale_hold_id") @db.Uuid
   receiptNo        String          @map("receipt_no") @db.VarChar(40)
   soldAt           DateTime        @map("sold_at") @db.Timestamptz
   subtotal         Decimal         @db.Decimal(19, 2)
@@ -506,10 +517,13 @@ model Sale {
   cashier          User            @relation("SaleCashier", fields: [cashierId], references: [id], onDelete: Restrict)
   cancelledBy      User?           @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
   customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  diningTable      DiningTable?    @relation(fields: [diningTableId], references: [id], onDelete: Restrict)
+  saleHold         SaleHold?       @relation(fields: [saleHoldId], references: [id], onDelete: Restrict)
   items            SaleItem[]
   payments         SalePayment[]
 
   @@unique([tenantId, receiptNo])
+  @@unique([saleHoldId])
   @@index([tenantId, soldAt(sort: Desc)])
   @@index([tenantId, status, soldAt])
   @@map("sales")
@@ -545,6 +559,68 @@ model SalePayment {
   sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
 
   @@map("sale_payments")
+}
+
+model DiningTable {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String     @map("tenant_id") @db.Uuid
+  outletId  String     @map("outlet_id") @db.Uuid
+  name      String     @db.VarChar(80)
+  sortOrder Int        @default(0) @map("sort_order")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime?  @map("deleted_at") @db.Timestamptz
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet    Outlet     @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  holds     SaleHold[]
+  sales     Sale[]
+
+  @@unique([tenantId, outletId, name])
+  @@index([tenantId, outletId, isActive])
+  @@map("dining_tables")
+}
+
+model SaleHold {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  outletId         String         @map("outlet_id") @db.Uuid
+  diningTableId    String?        @map("dining_table_id") @db.Uuid
+  cashierSessionId String?        @map("cashier_session_id") @db.Uuid
+  cashierId        String         @map("cashier_id") @db.Uuid
+  customerId       String?        @map("customer_id") @db.Uuid
+  status           String         @db.VarChar(20)
+  discountAmount   Decimal        @default(0) @map("discount_amount") @db.Decimal(19, 2)
+  notes            String?
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet           Outlet         @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  diningTable      DiningTable?   @relation(fields: [diningTableId], references: [id], onDelete: Restrict)
+  cashierSession   CashierSession? @relation(fields: [cashierSessionId], references: [id], onDelete: Restrict)
+  cashier          User           @relation("SaleHoldCashier", fields: [cashierId], references: [id], onDelete: Restrict)
+  customer         Customer?      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items            SaleHoldItem[]
+  sale             Sale?
+
+  @@index([tenantId, outletId, status])
+  @@index([tenantId, diningTableId, status])
+  @@map("sale_holds")
+}
+
+model SaleHoldItem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  holdId    String   @map("hold_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  quantity  Decimal  @db.Decimal(18, 4)
+  unitPrice Decimal  @map("unit_price") @db.Decimal(19, 2)
+  discountAmount Decimal @default(0) @map("discount_amount") @db.Decimal(19, 2)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  hold      SaleHold @relation(fields: [holdId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("sale_hold_items")
 }
 
 model ExpenseCategory {

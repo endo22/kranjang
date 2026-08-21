@@ -147,11 +147,62 @@ export const cashierCloseSchema = z.object({
   closingNotes: z.string().trim().max(255).optional().nullable(),
 });
 
-export const saleSchema = z.object({
+export const paymentMethodEnum = z.enum(["CASH", "QRIS", "TRANSFER", "EWALLET", "CARD"]);
+
+export const salePaymentLineSchema = z.object({
+  method: paymentMethodEnum,
+  amount: z.number().positive(),
+});
+
+export const saleSchema = z
+  .object({
+    customerId: z.string().uuid().optional().nullable(),
+    diningTableId: z.string().uuid().optional().nullable(),
+    discountAmount: z.number().min(0).optional(),
+    notes: optionalText,
+    paymentMethod: paymentMethodEnum.optional(),
+    payments: z.array(salePaymentLineSchema).min(1).optional(),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().uuid(),
+          quantity: z.number().positive(),
+          discountAmount: z.number().min(0).optional(),
+        }),
+      )
+      .min(1),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.paymentMethod && (!value.payments || value.payments.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Metode pembayaran wajib diisi.",
+        path: ["paymentMethod"],
+      });
+    }
+  });
+
+export const saleCancelSchema = z.object({
+  reason: z.string().trim().min(2).max(255),
+});
+
+export const diningTableSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  sortOrder: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const patchDiningTableSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const saleHoldSchema = z.object({
+  diningTableId: z.string().uuid().optional().nullable(),
   customerId: z.string().uuid().optional().nullable(),
   discountAmount: z.number().min(0).optional(),
   notes: optionalText,
-  paymentMethod: z.enum(["CASH", "QRIS", "TRANSFER", "EWALLET", "CARD"]),
   items: z
     .array(
       z.object({
@@ -163,16 +214,27 @@ export const saleSchema = z.object({
     .min(1),
 });
 
-export const saleCancelSchema = z.object({
-  reason: z.string().trim().min(2).max(255),
-});
+export const saleHoldCheckoutSchema = z
+  .object({
+    paymentMethod: paymentMethodEnum.optional(),
+    payments: z.array(salePaymentLineSchema).min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.paymentMethod && (!value.payments || value.payments.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Metode pembayaran wajib diisi.",
+        path: ["paymentMethod"],
+      });
+    }
+  });
 
 export const expenseSchema = z.object({
   categoryId: z.string().uuid(),
   description: z.string().trim().min(2).max(255),
   amount: z.number().positive(),
   expenseDate: z.string().min(8).max(32),
-  paymentMethod: z.enum(["CASH", "QRIS", "TRANSFER", "EWALLET", "CARD"]),
+  paymentMethod: paymentMethodEnum,
   attachmentPath: optionalText,
 });
 

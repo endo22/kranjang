@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 export const NAV = [
   { href: "/app", label: "Dashboard", kind: "live" as const },
   { href: "/app/cashier", label: "Kasir", kind: "perm" as const, permission: "sales.create" },
+  { href: "/app/tables", label: "Meja", kind: "perm" as const, permission: "sales.create" },
   { href: "/app/products", label: "Produk", kind: "perm" as const, permission: "product.view" },
   { href: "/app/inventory", label: "Inventory", kind: "perm" as const, permission: "inventory.view" },
   { href: "/app/purchases", label: "Pembelian", kind: "perm" as const, permission: "purchase.view" },
